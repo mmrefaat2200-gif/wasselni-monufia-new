@@ -36,7 +36,7 @@ const auth = getAuth(firebaseApp);
 const db = getFirestore(firebaseApp);
 
 /* =====================================================
-   APP STATE
+   STATE
    ===================================================== */
 
 let selectedRole = "customer";
@@ -52,19 +52,15 @@ function app() {
 function showMessage(message, type = "info") {
   const old = document.querySelector(".app-message");
 
-  if (old) {
-    old.remove();
-  }
+  if (old) old.remove();
 
   const box = document.createElement("div");
 
   box.className = `app-message ${type}`;
   box.textContent = message;
 
-  const root = app();
-
-  if (root) {
-    root.prepend(box);
+  if (app()) {
+    app().prepend(box);
   }
 
   setTimeout(() => {
@@ -74,23 +70,30 @@ function showMessage(message, type = "info") {
   }, 5000);
 }
 
-function loading(button, state, text = "جاري التحميل...") {
+function loading(
+  button,
+  state,
+  text = "جاري التحميل..."
+) {
   if (!button) return;
 
   if (state) {
-    button.dataset.oldText = button.textContent;
+    button.dataset.oldText =
+      button.textContent;
+
     button.textContent = text;
     button.disabled = true;
   } else {
     button.textContent =
-      button.dataset.oldText || button.textContent;
+      button.dataset.oldText ||
+      button.textContent;
 
     button.disabled = false;
   }
 }
 
 /* =====================================================
-   PHONE HELPERS
+   PHONE
    ===================================================== */
 
 function normalizeEgyptPhone(phone) {
@@ -114,27 +117,37 @@ function isValidEgyptPhone(phone) {
   return /^\+201[0125]\d{8}$/.test(phone);
 }
 
-/*
-  Firebase Email/Password يحتاج معرفًا على شكل email.
+/* =====================================================
+   INTERNAL FIREBASE LOGIN ID
+   =====================================================
 
-  المستخدم لن يرى هذا المعرف.
-  يتم توليده بشكل ثابت من رقم الهاتف.
+   نفس الرقم يمكن أن يكون:
 
-  مثال:
-  01012345678
-  ↓
-  201012345678@login.wasselni-monufia.app
+   01012345678 + customer
 
-  نفس الرقم دائمًا ينتج نفس المعرف،
-  وبالتالي يستطيع المستخدم الدخول من أي جهاز.
+   وفي نفس الوقت:
+
+   01012345678 + captain
+
+   لذلك كل دور له حساب Firebase مستقل.
 */
 
-function createInternalLoginEmail(phone) {
-  const normalized = normalizeEgyptPhone(phone);
+function createInternalLoginEmail(
+  phone,
+  role
+) {
+  const normalized =
+    normalizeEgyptPhone(phone);
 
-  const digits = normalized.replace(/\D/g, "");
+  const digits =
+    normalized.replace(/\D/g, "");
 
-  return `${digits}@login.wasselni-monufia.app`;
+  const roleName =
+    role === "captain"
+      ? "captain"
+      : "customer";
+
+  return `${digits}.${roleName}@login.wasselni-monufia.app`;
 }
 
 /* =====================================================
@@ -168,15 +181,24 @@ function renderHome() {
         </h2>
 
         <p>
-          اطلب مشوارك أو انضم للكباتن وابدأ تستقبل الرحلات.
+          اختار طريقة استخدامك للتطبيق
         </p>
 
         <button
-          id="loginBtn"
+          id="customerLoginBtn"
           class="primary-btn"
         >
-          تسجيل الدخول
+          👤 الدخول كعميل
         </button>
+
+        <button
+          id="captainLoginBtn"
+          class="secondary-btn"
+        >
+          🚕 الدخول ككابتن
+        </button>
+
+        <div style="height:12px"></div>
 
         <button
           id="registerBtn"
@@ -190,12 +212,37 @@ function renderHome() {
     </main>
   `;
 
-  document.getElementById("loginBtn").onclick = () => {
-    renderAuth("login");
+  document.getElementById(
+    "customerLoginBtn"
+  ).onclick = () => {
+
+    renderAuth(
+      "login",
+      "customer"
+    );
+
   };
 
-  document.getElementById("registerBtn").onclick = () => {
-    renderAuth("register");
+  document.getElementById(
+    "captainLoginBtn"
+  ).onclick = () => {
+
+    renderAuth(
+      "login",
+      "captain"
+    );
+
+  };
+
+  document.getElementById(
+    "registerBtn"
+  ).onclick = () => {
+
+    renderAuth(
+      "register",
+      "customer"
+    );
+
   };
 }
 
@@ -203,10 +250,20 @@ function renderHome() {
    AUTH PAGE
    ===================================================== */
 
-function renderAuth(mode = "login") {
-  selectedRole = "customer";
+function renderAuth(
+  mode = "login",
+  role = "customer"
+) {
 
-  const isRegister = mode === "register";
+  selectedRole = role;
+
+  const isRegister =
+    mode === "register";
+
+  const roleText =
+    selectedRole === "captain"
+      ? "كابتن 🚕"
+      : "عميل 👤";
 
   app().innerHTML = `
     <main class="auth-page">
@@ -242,18 +299,18 @@ function renderAuth(mode = "login") {
         </h2>
 
         <p class="hint">
-          ${
-            isRegister
-              ? "اختار نوع الحساب"
-              : "اختار نوع الحساب وسجل دخولك"
-          }
+          ${roleText}
         </p>
 
         <div class="role-buttons">
 
           <button
             id="customerRole"
-            class="role-btn active"
+            class="role-btn ${
+              selectedRole === "customer"
+                ? "active"
+                : ""
+            }"
             type="button"
           >
             👤 عميل
@@ -261,7 +318,11 @@ function renderAuth(mode = "login") {
 
           <button
             id="captainRole"
-            class="role-btn"
+            class="role-btn ${
+              selectedRole === "captain"
+                ? "active"
+                : ""
+            }"
             type="button"
           >
             🚕 كابتن
@@ -272,6 +333,7 @@ function renderAuth(mode = "login") {
         ${
           isRegister
             ? `
+
               <div class="input-group">
 
                 <label>
@@ -286,6 +348,7 @@ function renderAuth(mode = "login") {
                 />
 
               </div>
+
             `
             : ""
         }
@@ -346,6 +409,7 @@ function renderAuth(mode = "login") {
             isRegister
               ? `
                 عندك حساب بالفعل؟
+
                 <button
                   id="switchBtn"
                   type="button"
@@ -355,6 +419,7 @@ function renderAuth(mode = "login") {
               `
               : `
                 مستخدم جديد؟
+
                 <button
                   id="switchBtn"
                   type="button"
@@ -375,100 +440,100 @@ function renderAuth(mode = "login") {
      BACK
      =================================================== */
 
-  document.getElementById("backBtn").onclick =
-    renderHome;
+  document.getElementById(
+    "backBtn"
+  ).onclick = renderHome;
 
   /* ===================================================
      CUSTOMER
      =================================================== */
 
-  document.getElementById("customerRole").onclick =
-    () => {
+  document.getElementById(
+    "customerRole"
+  ).onclick = () => {
 
-      selectedRole = "customer";
+    renderAuth(
+      mode,
+      "customer"
+    );
 
-      document
-        .getElementById("customerRole")
-        .classList.add("active");
-
-      document
-        .getElementById("captainRole")
-        .classList.remove("active");
-
-      renderCaptainFields(isRegister);
-    };
+  };
 
   /* ===================================================
      CAPTAIN
      =================================================== */
 
-  document.getElementById("captainRole").onclick =
-    () => {
+  document.getElementById(
+    "captainRole"
+  ).onclick = () => {
 
-      selectedRole = "captain";
+    renderAuth(
+      mode,
+      "captain"
+    );
 
-      document
-        .getElementById("captainRole")
-        .classList.add("active");
-
-      document
-        .getElementById("customerRole")
-        .classList.remove("active");
-
-      renderCaptainFields(isRegister);
-    };
+  };
 
   /* ===================================================
-     SWITCH LOGIN / REGISTER
+     SWITCH
      =================================================== */
 
-  document.getElementById("switchBtn").onclick =
-    () => {
+  document.getElementById(
+    "switchBtn"
+  ).onclick = () => {
 
-      renderAuth(
-        isRegister
-          ? "login"
-          : "register"
-      );
+    renderAuth(
+      isRegister
+        ? "login"
+        : "register",
+      selectedRole
+    );
 
-    };
+  };
 
   /* ===================================================
-     MAIN BUTTON
+     MAIN
      =================================================== */
 
-  document.getElementById("mainAuthBtn").onclick =
-    () => {
+  document.getElementById(
+    "mainAuthBtn"
+  ).onclick = () => {
 
-      if (isRegister) {
-        registerAccount();
-      } else {
-        loginAccount();
-      }
+    if (isRegister) {
+      registerAccount();
+    } else {
+      loginAccount();
+    }
 
-    };
+  };
 
-  renderCaptainFields(isRegister);
+  renderCaptainFields(
+    isRegister
+  );
 }
 
 /* =====================================================
    CAPTAIN FIELDS
    ===================================================== */
 
-function renderCaptainFields(isRegister) {
+function renderCaptainFields(
+  isRegister
+) {
 
   const container =
-    document.getElementById("captainFields");
+    document.getElementById(
+      "captainFields"
+    );
 
-  if (!container) {
-    return;
-  }
+  if (!container) return;
 
   if (
     !isRegister ||
     selectedRole !== "captain"
   ) {
+
     container.innerHTML = "";
+
     return;
   }
 
@@ -534,28 +599,24 @@ function renderCaptainFields(isRegister) {
 async function registerAccount() {
 
   const button =
-    document.getElementById("mainAuthBtn");
+    document.getElementById(
+      "mainAuthBtn"
+    );
 
   const name =
-    document
-      .getElementById("name")
-      ?.value
-      .trim() || "";
+    document.getElementById(
+      "name"
+    )?.value.trim() || "";
 
   const phoneInput =
-    document
-      .getElementById("contact")
-      ?.value
-      .trim() || "";
+    document.getElementById(
+      "contact"
+    )?.value.trim() || "";
 
   const password =
-    document
-      .getElementById("password")
-      ?.value || "";
-
-  /* ===================================================
-     VALIDATION
-     =================================================== */
+    document.getElementById(
+      "password"
+    )?.value || "";
 
   if (!name) {
 
@@ -568,7 +629,9 @@ async function registerAccount() {
   }
 
   const phone =
-    normalizeEgyptPhone(phoneInput);
+    normalizeEgyptPhone(
+      phoneInput
+    );
 
   if (!isValidEgyptPhone(phone)) {
 
@@ -590,23 +653,24 @@ async function registerAccount() {
     return;
   }
 
+  /* ===================================================
+     CAPTAIN VALIDATION
+     =================================================== */
+
   if (
     selectedRole === "captain" &&
     (
-      !document
-        .getElementById("carType")
-        ?.value
-        .trim() ||
+      !document.getElementById(
+        "carType"
+      )?.value.trim() ||
 
-      !document
-        .getElementById("carModel")
-        ?.value
-        .trim() ||
+      !document.getElementById(
+        "carModel"
+      )?.value.trim() ||
 
-      !document
-        .getElementById("carNumber")
-        ?.value
-        .trim()
+      !document.getElementById(
+        "carNumber"
+      )?.value.trim()
     )
   ) {
 
@@ -627,14 +691,17 @@ async function registerAccount() {
   try {
 
     /* =================================================
-       INTERNAL FIREBASE LOGIN ID
+       ROLE-SPECIFIC FIREBASE ID
        ================================================= */
 
     const internalEmail =
-      createInternalLoginEmail(phone);
+      createInternalLoginEmail(
+        phone,
+        selectedRole
+      );
 
     /* =================================================
-       CREATE FIREBASE ACCOUNT
+       CREATE ACCOUNT
        ================================================= */
 
     const result =
@@ -651,17 +718,22 @@ async function registerAccount() {
     await saveUserProfile(
       result.user,
       name,
-      phone
+      phone,
+      selectedRole
     );
 
     showMessage(
-      "تم إنشاء حسابك بنجاح 🎉",
+      selectedRole === "captain"
+        ? "تم إنشاء حساب الكابتن بنجاح 🚕"
+        : "تم إنشاء حساب العميل بنجاح 👤",
       "success"
     );
 
     setTimeout(() => {
 
-      openUserApp(result.user);
+      openUserApp(
+        result.user
+      );
 
     }, 1000);
 
@@ -673,7 +745,9 @@ async function registerAccount() {
     );
 
     showMessage(
-      firebaseErrorMessage(error),
+      firebaseErrorMessage(
+        error
+      ),
       "error"
     );
 
@@ -694,7 +768,8 @@ async function registerAccount() {
 async function saveUserProfile(
   user,
   name,
-  phone
+  phone,
+  role
 ) {
 
   const profile = {
@@ -703,7 +778,7 @@ async function saveUserProfile(
 
     name: name,
 
-    role: selectedRole,
+    role: role,
 
     phone: phone,
 
@@ -712,25 +787,22 @@ async function saveUserProfile(
 
   };
 
-  if (selectedRole === "captain") {
+  if (role === "captain") {
 
     profile.carType =
-      document
-        .getElementById("carType")
-        ?.value
-        .trim() || "";
+      document.getElementById(
+        "carType"
+      )?.value.trim() || "";
 
     profile.carModel =
-      document
-        .getElementById("carModel")
-        ?.value
-        .trim() || "";
+      document.getElementById(
+        "carModel"
+      )?.value.trim() || "";
 
     profile.carNumber =
-      document
-        .getElementById("carNumber")
-        ?.value
-        .trim() || "";
+      document.getElementById(
+        "carNumber"
+      )?.value.trim() || "";
 
   }
 
@@ -754,25 +826,24 @@ async function saveUserProfile(
 async function loginAccount() {
 
   const button =
-    document.getElementById("mainAuthBtn");
+    document.getElementById(
+      "mainAuthBtn"
+    );
 
   const phoneInput =
-    document
-      .getElementById("contact")
-      ?.value
-      .trim() || "";
+    document.getElementById(
+      "contact"
+    )?.value.trim() || "";
 
   const password =
-    document
-      .getElementById("password")
-      ?.value || "";
-
-  /* ===================================================
-     VALIDATION
-     =================================================== */
+    document.getElementById(
+      "password"
+    )?.value || "";
 
   const phone =
-    normalizeEgyptPhone(phoneInput);
+    normalizeEgyptPhone(
+      phoneInput
+    );
 
   if (!isValidEgyptPhone(phone)) {
 
@@ -803,15 +874,14 @@ async function loginAccount() {
   try {
 
     /* =================================================
-       CREATE SAME INTERNAL LOGIN ID
+       SAME PHONE + DIFFERENT ROLE = DIFFERENT ACCOUNT
        ================================================= */
 
     const internalEmail =
-      createInternalLoginEmail(phone);
-
-    /* =================================================
-       FIREBASE LOGIN
-       ================================================= */
+      createInternalLoginEmail(
+        phone,
+        selectedRole
+      );
 
     const result =
       await signInWithEmailAndPassword(
@@ -821,7 +891,7 @@ async function loginAccount() {
       );
 
     /* =================================================
-       GET PROFILE
+       LOAD PROFILE
        ================================================= */
 
     const profileSnap =
@@ -835,12 +905,12 @@ async function loginAccount() {
 
     if (!profileSnap.exists()) {
 
+      await signOut(auth);
+
       showMessage(
-        "الحساب موجود ولكن بيانات الحساب غير مكتملة.",
+        "الحساب موجود لكن بياناته غير موجودة.",
         "error"
       );
-
-      await signOut(auth);
 
       return;
     }
@@ -849,27 +919,22 @@ async function loginAccount() {
       profileSnap.data();
 
     /* =================================================
-       CHECK ROLE
+       OPEN CORRECT PLATFORM
        ================================================= */
 
     if (
-      profile.role &&
       profile.role !== selectedRole
     ) {
 
       await signOut(auth);
 
       showMessage(
-        "نوع الحساب الذي اخترته لا يطابق الحساب المسجل.",
+        "نوع الحساب غير صحيح.",
         "error"
       );
 
       return;
     }
-
-    /* =================================================
-       OPEN APP
-       ================================================= */
 
     openUserApp(
       result.user
@@ -883,7 +948,9 @@ async function loginAccount() {
     );
 
     showMessage(
-      firebaseErrorMessage(error),
+      firebaseErrorMessage(
+        error
+      ),
       "error"
     );
 
@@ -898,10 +965,12 @@ async function loginAccount() {
 }
 
 /* =====================================================
-   USER APP
+   OPEN USER APP
    ===================================================== */
 
-async function openUserApp(user) {
+async function openUserApp(
+  user
+) {
 
   try {
 
@@ -915,11 +984,6 @@ async function openUserApp(user) {
       );
 
     if (!profileSnap.exists()) {
-
-      showMessage(
-        "لم يتم العثور على بيانات الحساب.",
-        "error"
-      );
 
       await signOut(auth);
 
@@ -950,23 +1014,24 @@ async function openUserApp(user) {
   } catch (error) {
 
     console.error(
-      "PROFILE ERROR:",
+      "OPEN APP ERROR:",
       error
     );
 
     showMessage(
-      "تم تسجيل الدخول، لكن حدثت مشكلة في تحميل الحساب.",
+      "تم تسجيل الدخول لكن حصلت مشكلة في تحميل الحساب.",
       "error"
     );
-
   }
 }
 
 /* =====================================================
-   CUSTOMER HOME
+   CUSTOMER PLATFORM
    ===================================================== */
 
-function renderCustomerHome(profile) {
+function renderCustomerHome(
+  profile
+) {
 
   app().innerHTML = `
 
@@ -977,12 +1042,13 @@ function renderCustomerHome(profile) {
         <div>
 
           <small>
-            أهلاً بيك
+            أهلاً بيك يا عميل 👤
           </small>
 
           <h1>
             ${escapeHtml(
-              profile.name || "العميل"
+              profile.name ||
+              "العميل"
             )}
           </h1>
 
@@ -1075,10 +1141,12 @@ function renderCustomerHome(profile) {
 }
 
 /* =====================================================
-   CAPTAIN HOME
+   CAPTAIN PLATFORM
    ===================================================== */
 
-function renderCaptainHome(profile) {
+function renderCaptainHome(
+  profile
+) {
 
   app().innerHTML = `
 
@@ -1089,12 +1157,13 @@ function renderCaptainHome(profile) {
         <div>
 
           <small>
-            أهلاً يا كابتن
+            أهلاً يا كابتن 🚕
           </small>
 
           <h1>
             ${escapeHtml(
-              profile.name || "الكابتن"
+              profile.name ||
+              "الكابتن"
             )}
           </h1>
 
@@ -1116,7 +1185,7 @@ function renderCaptainHome(profile) {
         </div>
 
         <h2>
-          حالة الكابتن
+          منصة الكابتن
         </h2>
 
         <p id="captainStatus">
@@ -1136,6 +1205,38 @@ function renderCaptainHome(profile) {
         >
           🔴 غير متاح
         </button>
+
+      </section>
+
+      <section class="welcome-card">
+
+        <h3>
+          بيانات السيارة
+        </h3>
+
+        <p>
+          النوع:
+          ${escapeHtml(
+            profile.carType ||
+            "-"
+          )}
+        </p>
+
+        <p>
+          الموديل:
+          ${escapeHtml(
+            profile.carModel ||
+            "-"
+          )}
+        </p>
+
+        <p>
+          اللوحة:
+          ${escapeHtml(
+            profile.carNumber ||
+            "-"
+          )}
+        </p>
 
       </section>
 
@@ -1210,10 +1311,12 @@ function renderCaptainHome(profile) {
 }
 
 /* =====================================================
-   FIREBASE ERROR MESSAGES
+   FIREBASE ERRORS
    ===================================================== */
 
-function firebaseErrorMessage(error) {
+function firebaseErrorMessage(
+  error
+) {
 
   const code =
     error?.code || "";
@@ -1221,16 +1324,16 @@ function firebaseErrorMessage(error) {
   const messages = {
 
     "auth/email-already-in-use":
-      "رقم الهاتف ده مسجل بالفعل. جرّب تسجيل الدخول.",
+      "الحساب ده موجود بالفعل لهذا الدور. جرّب تسجيل الدخول.",
 
     "auth/invalid-email":
-      "بيانات تسجيل الدخول غير صحيحة.",
+      "بيانات الحساب غير صحيحة.",
 
     "auth/weak-password":
-      "كلمة المرور ضعيفة. استخدم 6 أحرف أو أكثر.",
+      "كلمة المرور لازم تكون 6 أحرف أو أكثر.",
 
     "auth/user-not-found":
-      "رقم الهاتف غير مسجل.",
+      "لا يوجد حساب بهذا الرقم لهذا الدور.",
 
     "auth/wrong-password":
       "رقم الهاتف أو كلمة المرور غير صحيحة.",
@@ -1245,16 +1348,19 @@ function firebaseErrorMessage(error) {
       "تأكد من اتصال الإنترنت.",
 
     "auth/operation-not-allowed":
-      "طريقة تسجيل الدخول غير مفعلة في Firebase.",
+      "Email/Password غير مفعّل في Firebase.",
 
-    "auth/internal-error":
-      "حدث خطأ داخلي. حاول مرة أخرى."
+    "auth/invalid-api-key":
+      "مفتاح Firebase غير صحيح.",
+
+    "auth/project-not-found":
+      "مشروع Firebase غير موجود أو الإعدادات غير صحيحة."
 
   };
 
   return (
     messages[code] ||
-    "حدث خطأ أثناء تنفيذ العملية."
+    `حدث خطأ أثناء العملية. (${code || "unknown"})`
   );
 }
 
@@ -1262,7 +1368,9 @@ function firebaseErrorMessage(error) {
    ESCAPE HTML
    ===================================================== */
 
-function escapeHtml(value) {
+function escapeHtml(
+  value
+) {
 
   return String(value)
 
@@ -1290,7 +1398,6 @@ function escapeHtml(value) {
       "'",
       "&#039;"
     );
-
 }
 
 /* =====================================================
