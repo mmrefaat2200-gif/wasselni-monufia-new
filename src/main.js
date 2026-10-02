@@ -1,5 +1,8 @@
 import "./style.css";
 
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
 import { initializeApp } from "firebase/app";
 
 import {
@@ -14,12 +17,21 @@ import {
   getFirestore,
   doc,
   setDoc,
-  getDoc
+  getDoc,
+  addDoc,
+  collection,
+  serverTimestamp
 } from "firebase/firestore";
 
-/* =====================================================
+import {
+  getCurrentPosition,
+  requestPermissions,
+  checkPermissions
+} from "@capacitor/geolocation";
+
+/* ======================================================
    FIREBASE
-   ===================================================== */
+====================================================== */
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -30,84 +42,68 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-const firebaseApp = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
-
-/* =====================================================
+/* ======================================================
    STATE
-   ===================================================== */
+====================================================== */
 
+let currentUser = null;
+let currentProfile = null;
 let selectedRole = "customer";
 
-/* =====================================================
-   HELPERS
-   ===================================================== */
+let pickupLocation = null;
+let destinationLocation = null;
 
-function app() {
-  return document.getElementById("root");
+let tripMap = null;
+let pickupMarker = null;
+let destinationMarker = null;
+
+/* ======================================================
+   HELPERS
+====================================================== */
+
+function appRoot() {
+  return document.getElementById("app");
 }
 
 function showMessage(message, type = "info") {
   const old = document.querySelector(".app-message");
-
   if (old) old.remove();
 
   const box = document.createElement("div");
-
   box.className = `app-message ${type}`;
   box.textContent = message;
 
-  if (app()) {
-    app().prepend(box);
-  }
+  appRoot().prepend(box);
 
   setTimeout(() => {
-    if (box.parentNode) {
-      box.remove();
-    }
-  }, 5000);
+    box.remove();
+  }, 4000);
 }
 
-function loading(
-  button,
-  state,
-  text = "جاري التحميل..."
-) {
-  if (!button) return;
-
-  if (state) {
-    button.dataset.oldText =
-      button.textContent;
-
-    button.textContent = text;
-    button.disabled = true;
-  } else {
-    button.textContent =
-      button.dataset.oldText ||
-      button.textContent;
-
-    button.disabled = false;
-  }
+function loading(text = "جاري التحميل...") {
+  appRoot().innerHTML = `
+    <div class="loading-screen">
+      <div class="loader"></div>
+      <p>${text}</p>
+    </div>
+  `;
 }
-
-/* =====================================================
-   PHONE
-   ===================================================== */
 
 function normalizeEgyptPhone(phone) {
-  let value = String(phone || "")
-    .trim()
-    .replace(/\s+/g, "")
-    .replace(/-/g, "");
+  let value = String(phone || "").trim();
 
-  if (value.startsWith("0020")) {
-    value = "+" + value.substring(2);
-  }
+  value = value.replace(/\s+/g, "");
 
   if (value.startsWith("01")) {
     value = "+20" + value.substring(1);
+  }
+
+  if (value.startsWith("20") && !value.startsWith("+20")) {
+    value = "+" + value;
   }
 
   return value;
@@ -117,30 +113,8 @@ function isValidEgyptPhone(phone) {
   return /^\+201[0125]\d{8}$/.test(phone);
 }
 
-/* =====================================================
-   INTERNAL FIREBASE LOGIN ID
-   =====================================================
-
-   نفس الرقم يمكن أن يكون:
-
-   01012345678 + customer
-
-   وفي نفس الوقت:
-
-   01012345678 + captain
-
-   لذلك كل دور له حساب Firebase مستقل.
-*/
-
-function createInternalLoginEmail(
-  phone,
-  role
-) {
-  const normalized =
-    normalizeEgyptPhone(phone);
-
-  const digits =
-    normalized.replace(/\D/g, "");
+function createInternalLoginEmail(phone, role) {
+  const digits = phone.replace(/\D/g, "");
 
   const roleName =
     role === "captain"
@@ -150,1316 +124,1230 @@ function createInternalLoginEmail(
   return `${digits}.${roleName}@login.wasselni-monufia.app`;
 }
 
-/* =====================================================
+function firebaseErrorMessage(error) {
+  const code = error?.code || "unknown";
+
+  const messages = {
+    "auth/invalid-credential": "رقم الهاتف أو كلمة المرور غير صحيحة.",
+    "auth/email-already-in-use": "الحساب موجود بالفعل.",
+    "auth/weak-password": "كلمة المرور ضعيفة.",
+    "auth/invalid-email": "بيانات الحساب غير صحيحة.",
+    "auth/user-not-found": "الحساب غير موجود.",
+    "auth/wrong-password": "كلمة المرور غير صحيحة."
+  };
+
+  return messages[code] || `حدث خطأ أثناء العملية. (${code})`;
+}
+
+/* ======================================================
    HOME
-   ===================================================== */
+====================================================== */
 
 function renderHome() {
-  app().innerHTML = `
-    <main class="landing">
+  appRoot().innerHTML = `
+    <div class="page-container">
 
       <div class="brand">
-
-        <div class="logo">
-          🚕
-        </div>
-
-        <h1>
-          وصلني المنوفية
-        </h1>
-
-        <p>
-          مشاويرك أسهل وأسرع
-        </p>
-
+        <h1>وصلني المنوفية</h1>
+        <p>مشوارك أسهل وأسرع</p>
       </div>
 
       <div class="home-card">
 
-        <h2>
-          أهلاً بيك 👋
-        </h2>
-
-        <p>
-          اختار طريقة استخدامك للتطبيق
-        </p>
-
-        <button
-          id="customerLoginBtn"
-          class="primary-btn"
-        >
+        <button id="customerLoginBtn" class="primary-btn">
           👤 الدخول كعميل
         </button>
 
-        <button
-          id="captainLoginBtn"
-          class="secondary-btn"
-        >
+        <button id="captainLoginBtn" class="secondary-btn">
           🚕 الدخول ككابتن
         </button>
 
-        <div style="height:12px"></div>
-
-        <button
-          id="registerBtn"
-          class="secondary-btn"
-        >
+        <button id="registerBtn" class="secondary-btn">
           إنشاء حساب جديد
         </button>
 
       </div>
 
-    </main>
+    </div>
   `;
 
-  document.getElementById(
-    "customerLoginBtn"
-  ).onclick = () => {
+  document
+    .getElementById("customerLoginBtn")
+    .onclick = () => renderAuth("customer", "login");
 
-    renderAuth(
-      "login",
-      "customer"
-    );
+  document
+    .getElementById("captainLoginBtn")
+    .onclick = () => renderAuth("captain", "login");
 
-  };
-
-  document.getElementById(
-    "captainLoginBtn"
-  ).onclick = () => {
-
-    renderAuth(
-      "login",
-      "captain"
-    );
-
-  };
-
-  document.getElementById(
-    "registerBtn"
-  ).onclick = () => {
-
-    renderAuth(
-      "register",
-      "customer"
-    );
-
-  };
+  document
+    .getElementById("registerBtn")
+    .onclick = () => renderAuth("customer", "register");
 }
 
-/* =====================================================
-   AUTH PAGE
-   ===================================================== */
+/* ======================================================
+   AUTH
+====================================================== */
 
-function renderAuth(
-  mode = "login",
-  role = "customer"
-) {
-
+function renderAuth(role = "customer", mode = "login") {
   selectedRole = role;
 
-  const isRegister =
-    mode === "register";
+  const isRegister = mode === "register";
 
-  const roleText =
-    selectedRole === "captain"
-      ? "كابتن 🚕"
-      : "عميل 👤";
+  appRoot().innerHTML = `
+    <div class="page-container">
 
-  app().innerHTML = `
-    <main class="auth-page">
+      <button id="backBtn" class="back-btn">← رجوع</button>
 
-      <button
-        id="backBtn"
-        class="back-btn"
-        type="button"
-      >
-        ← رجوع
-      </button>
-
-      <div class="auth-brand">
-
-        <div class="logo small">
-          🚕
-        </div>
-
-        <h1>
-          وصلني المنوفية
-        </h1>
-
-      </div>
-
-      <section class="auth-card">
+      <div class="auth-card">
 
         <h2>
-          ${
-            isRegister
-              ? "إنشاء حساب"
-              : "تسجيل الدخول"
-          }
+          ${isRegister ? "إنشاء حساب جديد" : "تسجيل الدخول"}
         </h2>
 
-        <p class="hint">
-          ${roleText}
-        </p>
-
-        <div class="role-buttons">
+        <div class="role-switch">
 
           <button
-            id="customerRole"
-            class="role-btn ${
-              selectedRole === "customer"
-                ? "active"
-                : ""
-            }"
-            type="button"
-          >
+            id="customerRoleBtn"
+            class="${role === "customer" ? "active" : ""}">
             👤 عميل
           </button>
 
           <button
-            id="captainRole"
-            class="role-btn ${
-              selectedRole === "captain"
-                ? "active"
-                : ""
-            }"
-            type="button"
-          >
+            id="captainRoleBtn"
+            class="${role === "captain" ? "active" : ""}">
             🚕 كابتن
           </button>
 
         </div>
 
+        <div class="input-group">
+          <label>رقم الهاتف</label>
+          <input
+            id="phoneInput"
+            type="tel"
+            placeholder="01xxxxxxxxx"
+          />
+        </div>
+
         ${
           isRegister
             ? `
-
               <div class="input-group">
-
-                <label>
-                  الاسم بالكامل
-                </label>
-
+                <label>الاسم بالكامل</label>
                 <input
-                  id="name"
+                  id="nameInput"
                   type="text"
-                  placeholder="اكتب اسمك بالكامل"
-                  autocomplete="name"
+                  placeholder="اكتب اسمك"
                 />
-
               </div>
-
             `
             : ""
         }
 
-        <div id="captainFields"></div>
+        ${
+          isRegister && role === "captain"
+            ? `
+              <div class="input-group">
+                <label>نوع السيارة</label>
+                <input
+                  id="carTypeInput"
+                  type="text"
+                  placeholder="سيدان"
+                />
+              </div>
+
+              <div class="input-group">
+                <label>موديل السيارة</label>
+                <input
+                  id="carModelInput"
+                  type="text"
+                  placeholder="لانسر"
+                />
+              </div>
+
+              <div class="input-group">
+                <label>رقم السيارة</label>
+                <input
+                  id="carNumberInput"
+                  type="text"
+                  placeholder="م ن 1234"
+                />
+              </div>
+            `
+            : ""
+        }
 
         <div class="input-group">
-
-          <label>
-            رقم الهاتف
-          </label>
-
+          <label>كلمة المرور</label>
           <input
-            id="contact"
-            type="tel"
-            dir="ltr"
-            inputmode="tel"
-            placeholder="01012345678"
-            autocomplete="tel"
-          />
-
-        </div>
-
-        <div class="input-group">
-
-          <label>
-            كلمة المرور
-          </label>
-
-          <input
-            id="password"
+            id="passwordInput"
             type="password"
-            placeholder="6 أحرف على الأقل"
-            autocomplete="${
-              isRegister
-                ? "new-password"
-                : "current-password"
-            }"
+            placeholder="كلمة المرور"
           />
-
         </div>
 
-        <button
-          id="mainAuthBtn"
-          class="primary-btn"
-          type="button"
-        >
-          ${
-            isRegister
-              ? "إنشاء الحساب"
-              : "تسجيل الدخول"
-          }
+        <button id="authBtn" class="primary-btn">
+          ${isRegister ? "إنشاء الحساب" : "دخول"}
         </button>
 
-        <p class="switch-auth">
-
-          ${
-            isRegister
-              ? `
-                عندك حساب بالفعل؟
-
-                <button
-                  id="switchBtn"
-                  type="button"
-                >
-                  تسجيل الدخول
-                </button>
-              `
-              : `
-                مستخدم جديد؟
-
-                <button
-                  id="switchBtn"
-                  type="button"
-                >
-                  إنشاء حساب
-                </button>
-              `
-          }
-
-        </p>
-
-      </section>
-
-    </main>
-  `;
-
-  /* ===================================================
-     BACK
-     =================================================== */
-
-  document.getElementById(
-    "backBtn"
-  ).onclick = renderHome;
-
-  /* ===================================================
-     CUSTOMER
-     =================================================== */
-
-  document.getElementById(
-    "customerRole"
-  ).onclick = () => {
-
-    renderAuth(
-      mode,
-      "customer"
-    );
-
-  };
-
-  /* ===================================================
-     CAPTAIN
-     =================================================== */
-
-  document.getElementById(
-    "captainRole"
-  ).onclick = () => {
-
-    renderAuth(
-      mode,
-      "captain"
-    );
-
-  };
-
-  /* ===================================================
-     SWITCH
-     =================================================== */
-
-  document.getElementById(
-    "switchBtn"
-  ).onclick = () => {
-
-    renderAuth(
-      isRegister
-        ? "login"
-        : "register",
-      selectedRole
-    );
-
-  };
-
-  /* ===================================================
-     MAIN
-     =================================================== */
-
-  document.getElementById(
-    "mainAuthBtn"
-  ).onclick = () => {
-
-    if (isRegister) {
-      registerAccount();
-    } else {
-      loginAccount();
-    }
-
-  };
-
-  renderCaptainFields(
-    isRegister
-  );
-}
-
-/* =====================================================
-   CAPTAIN FIELDS
-   ===================================================== */
-
-function renderCaptainFields(
-  isRegister
-) {
-
-  const container =
-    document.getElementById(
-      "captainFields"
-    );
-
-  if (!container) return;
-
-  if (
-    !isRegister ||
-    selectedRole !== "captain"
-  ) {
-
-    container.innerHTML = "";
-
-    return;
-  }
-
-  container.innerHTML = `
-
-    <div class="captain-box">
-
-      <h3>
-        بيانات الكابتن 🚕
-      </h3>
-
-      <div class="input-group">
-
-        <label>
-          نوع السيارة
-        </label>
-
-        <input
-          id="carType"
-          type="text"
-          placeholder="سيدان / ميكروباص / غيره"
-        />
+        ${
+          isRegister
+            ? `
+              <button id="loginInsteadBtn" class="link-btn">
+                عندي حساب بالفعل
+              </button>
+            `
+            : `
+              <button id="registerInsteadBtn" class="link-btn">
+                إنشاء حساب جديد
+              </button>
+            `
+        }
 
       </div>
-
-      <div class="input-group">
-
-        <label>
-          موديل السيارة
-        </label>
-
-        <input
-          id="carModel"
-          type="text"
-          placeholder="مثال: لانسر"
-        />
-
-      </div>
-
-      <div class="input-group">
-
-        <label>
-          رقم السيارة / اللوحة
-        </label>
-
-        <input
-          id="carNumber"
-          type="text"
-          placeholder="مثال: م ن 1234"
-        />
-
-      </div>
-
     </div>
-
   `;
+
+  document.getElementById("backBtn").onclick = renderHome;
+
+  document.getElementById("customerRoleBtn").onclick = () =>
+    renderAuth("customer", mode);
+
+  document.getElementById("captainRoleBtn").onclick = () =>
+    renderAuth("captain", mode);
+
+  document.getElementById("authBtn").onclick = () =>
+    isRegister ? registerAccount() : loginAccount();
+
+  if (isRegister) {
+    document.getElementById("loginInsteadBtn").onclick = () =>
+      renderAuth(role, "login");
+  } else {
+    document.getElementById("registerInsteadBtn").onclick = () =>
+      renderAuth(role, "register");
+  }
 }
 
-/* =====================================================
+/* ======================================================
    REGISTER
-   ===================================================== */
+====================================================== */
 
 async function registerAccount() {
-
-  const button =
-    document.getElementById(
-      "mainAuthBtn"
-    );
-
-  const name =
-    document.getElementById(
-      "name"
-    )?.value.trim() || "";
-
-  const phoneInput =
-    document.getElementById(
-      "contact"
-    )?.value.trim() || "";
+  const phone = normalizeEgyptPhone(
+    document.getElementById("phoneInput")?.value
+  );
 
   const password =
-    document.getElementById(
-      "password"
-    )?.value || "";
+    document.getElementById("passwordInput")?.value || "";
 
-  if (!name) {
-
-    showMessage(
-      "اكتب الاسم بالكامل",
-      "error"
-    );
-
-    return;
-  }
-
-  const phone =
-    normalizeEgyptPhone(
-      phoneInput
-    );
+  const name =
+    document.getElementById("nameInput")?.value.trim() || "";
 
   if (!isValidEgyptPhone(phone)) {
-
-    showMessage(
-      "اكتب رقم هاتف مصري صحيح مثل 01012345678",
-      "error"
-    );
-
+    showMessage("اكتب رقم هاتف مصري صحيح.", "error");
     return;
   }
 
   if (password.length < 6) {
-
-    showMessage(
-      "كلمة المرور لازم تكون 6 أحرف على الأقل",
-      "error"
-    );
-
+    showMessage("كلمة المرور يجب أن تكون 6 أحرف على الأقل.", "error");
     return;
   }
 
-  /* ===================================================
-     CAPTAIN VALIDATION
-     =================================================== */
-
-  if (
-    selectedRole === "captain" &&
-    (
-      !document.getElementById(
-        "carType"
-      )?.value.trim() ||
-
-      !document.getElementById(
-        "carModel"
-      )?.value.trim() ||
-
-      !document.getElementById(
-        "carNumber"
-      )?.value.trim()
-    )
-  ) {
-
-    showMessage(
-      "اكمل بيانات السيارة",
-      "error"
-    );
-
+  if (!name) {
+    showMessage("اكتب الاسم بالكامل.", "error");
     return;
   }
 
-  loading(
-    button,
-    true,
-    "جاري إنشاء الحساب..."
+  const email = createInternalLoginEmail(
+    phone,
+    selectedRole
   );
 
   try {
-
-    /* =================================================
-       ROLE-SPECIFIC FIREBASE ID
-       ================================================= */
-
-    const internalEmail =
-      createInternalLoginEmail(
-        phone,
-        selectedRole
-      );
-
-    /* =================================================
-       CREATE ACCOUNT
-       ================================================= */
+    loading("جاري إنشاء الحساب...");
 
     const result =
       await createUserWithEmailAndPassword(
         auth,
-        internalEmail,
+        email,
         password
       );
 
-    /* =================================================
-       SAVE PROFILE
-       ================================================= */
-
-    await saveUserProfile(
-      result.user,
-      name,
+    const profile = {
+      uid: result.user.uid,
       phone,
-      selectedRole
+      name,
+      role: selectedRole,
+      createdAt: serverTimestamp()
+    };
+
+    if (selectedRole === "captain") {
+      profile.carType =
+        document.getElementById("carTypeInput")?.value.trim() || "";
+
+      profile.carModel =
+        document.getElementById("carModelInput")?.value.trim() || "";
+
+      profile.carNumber =
+        document.getElementById("carNumberInput")?.value.trim() || "";
+    }
+
+    await setDoc(
+      doc(db, "users", result.user.uid),
+      profile
     );
 
-    showMessage(
-      selectedRole === "captain"
-        ? "تم إنشاء حساب الكابتن بنجاح 🚕"
-        : "تم إنشاء حساب العميل بنجاح 👤",
-      "success"
-    );
+    currentUser = result.user;
+    currentProfile = profile;
 
-    setTimeout(() => {
+    showMessage("تم إنشاء الحساب بنجاح.", "success");
 
-      openUserApp(
-        result.user
-      );
-
-    }, 1000);
+    if (selectedRole === "captain") {
+      renderCaptainHome(profile);
+    } else {
+      renderCustomerHome(profile);
+    }
 
   } catch (error) {
-
-    console.error(
-      "REGISTER ERROR:",
-      error
-    );
+    console.error(error);
 
     showMessage(
-      firebaseErrorMessage(
-        error
-      ),
+      firebaseErrorMessage(error),
       "error"
     );
 
-  } finally {
-
-    loading(
-      button,
-      false
-    );
-
+    renderAuth(selectedRole, "register");
   }
 }
 
-/* =====================================================
-   SAVE PROFILE
-   ===================================================== */
-
-async function saveUserProfile(
-  user,
-  name,
-  phone,
-  role
-) {
-
-  const profile = {
-
-    uid: user.uid,
-
-    name: name,
-
-    role: role,
-
-    phone: phone,
-
-    createdAt:
-      new Date().toISOString()
-
-  };
-
-  if (role === "captain") {
-
-    profile.carType =
-      document.getElementById(
-        "carType"
-      )?.value.trim() || "";
-
-    profile.carModel =
-      document.getElementById(
-        "carModel"
-      )?.value.trim() || "";
-
-    profile.carNumber =
-      document.getElementById(
-        "carNumber"
-      )?.value.trim() || "";
-
-  }
-
-  await setDoc(
-    doc(
-      db,
-      "users",
-      user.uid
-    ),
-    profile,
-    {
-      merge: true
-    }
-  );
-}
-
-/* =====================================================
+/* ======================================================
    LOGIN
-   ===================================================== */
+====================================================== */
 
 async function loginAccount() {
-
-  const button =
-    document.getElementById(
-      "mainAuthBtn"
-    );
-
-  const phoneInput =
-    document.getElementById(
-      "contact"
-    )?.value.trim() || "";
+  const phone = normalizeEgyptPhone(
+    document.getElementById("phoneInput")?.value
+  );
 
   const password =
-    document.getElementById(
-      "password"
-    )?.value || "";
-
-  const phone =
-    normalizeEgyptPhone(
-      phoneInput
-    );
+    document.getElementById("passwordInput")?.value || "";
 
   if (!isValidEgyptPhone(phone)) {
-
-    showMessage(
-      "اكتب رقم هاتف مصري صحيح مثل 01012345678",
-      "error"
-    );
-
+    showMessage("اكتب رقم هاتف مصري صحيح.", "error");
     return;
   }
 
   if (!password) {
-
-    showMessage(
-      "اكتب كلمة المرور",
-      "error"
-    );
-
+    showMessage("اكتب كلمة المرور.", "error");
     return;
   }
 
-  loading(
-    button,
-    true,
-    "جاري تسجيل الدخول..."
+  const email = createInternalLoginEmail(
+    phone,
+    selectedRole
   );
 
   try {
-
-    /* =================================================
-       SAME PHONE + DIFFERENT ROLE = DIFFERENT ACCOUNT
-       ================================================= */
-
-    const internalEmail =
-      createInternalLoginEmail(
-        phone,
-        selectedRole
-      );
+    loading("جاري تسجيل الدخول...");
 
     const result =
       await signInWithEmailAndPassword(
         auth,
-        internalEmail,
+        email,
         password
       );
 
-    /* =================================================
-       LOAD PROFILE
-       ================================================= */
+    currentUser = result.user;
 
-    const profileSnap =
-      await getDoc(
-        doc(
-          db,
-          "users",
-          result.user.uid
-        )
-      );
+    const profileSnap = await getDoc(
+      doc(db, "users", result.user.uid)
+    );
 
     if (!profileSnap.exists()) {
+      throw new Error("PROFILE_NOT_FOUND");
+    }
 
+    currentProfile = profileSnap.data();
+
+    if (currentProfile.role !== selectedRole) {
       await signOut(auth);
 
       showMessage(
-        "الحساب موجود لكن بياناته غير موجودة.",
+        "نوع الحساب غير مطابق.",
         "error"
       );
-
-      return;
-    }
-
-    const profile =
-      profileSnap.data();
-
-    /* =================================================
-       OPEN CORRECT PLATFORM
-       ================================================= */
-
-    if (
-      profile.role !== selectedRole
-    ) {
-
-      await signOut(auth);
-
-      showMessage(
-        "نوع الحساب غير صحيح.",
-        "error"
-      );
-
-      return;
-    }
-
-    openUserApp(
-      result.user
-    );
-
-  } catch (error) {
-
-    console.error(
-      "LOGIN ERROR:",
-      error
-    );
-
-    showMessage(
-      firebaseErrorMessage(
-        error
-      ),
-      "error"
-    );
-
-  } finally {
-
-    loading(
-      button,
-      false
-    );
-
-  }
-}
-
-/* =====================================================
-   OPEN USER APP
-   ===================================================== */
-
-async function openUserApp(
-  user
-) {
-
-  try {
-
-    const profileSnap =
-      await getDoc(
-        doc(
-          db,
-          "users",
-          user.uid
-        )
-      );
-
-    if (!profileSnap.exists()) {
-
-      await signOut(auth);
 
       renderHome();
+      return;
+    }
+
+    if (selectedRole === "captain") {
+      renderCaptainHome(currentProfile);
+    } else {
+      renderCustomerHome(currentProfile);
+    }
+
+  } catch (error) {
+    console.error(error);
+
+    showMessage(
+      error.message === "PROFILE_NOT_FOUND"
+        ? "بيانات الحساب غير موجودة."
+        : firebaseErrorMessage(error),
+      "error"
+    );
+
+    renderAuth(selectedRole, "login");
+  }
+}
+
+/* ======================================================
+   CUSTOMER HOME
+====================================================== */
+
+function renderCustomerHome(profile) {
+  appRoot().innerHTML = `
+    <div class="page-container">
+
+      <div class="dashboard">
+
+        <div class="dashboard-header">
+          <h2>أهلاً ${profile.name || "بك"} 👋</h2>
+          <p>عميل - وصلني المنوفية</p>
+        </div>
+
+        <button
+          id="newTripBtn"
+          class="primary-btn big-btn">
+          🚕 رحلة جديدة
+        </button>
+
+        <button
+          id="myTripsBtn"
+          class="secondary-btn">
+          📋 رحلاتي
+        </button>
+
+        <button
+          id="accountBtn"
+          class="secondary-btn">
+          👤 حسابي
+        </button>
+
+        <button
+          id="logoutBtn"
+          class="danger-btn">
+          تسجيل الخروج
+        </button>
+
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById("newTripBtn").onclick =
+    renderNewTripPage;
+
+  document.getElementById("myTripsBtn").onclick = () => {
+    showMessage(
+      "قسم رحلاتي هنضيفه بعد شاشة الرحلة.",
+      "info"
+    );
+  };
+
+  document.getElementById("accountBtn").onclick = () => {
+    showMessage(
+      `رقم الهاتف: ${profile.phone}`,
+      "info"
+    );
+  };
+
+  document.getElementById("logoutBtn").onclick =
+    async () => {
+      await signOut(auth);
+      currentUser = null;
+      currentProfile = null;
+      renderHome();
+    };
+}
+
+/* ======================================================
+   CAPTAIN HOME
+====================================================== */
+
+function renderCaptainHome(profile) {
+  appRoot().innerHTML = `
+    <div class="page-container">
+
+      <div class="dashboard">
+
+        <div class="dashboard-header">
+          <h2>أهلاً ${profile.name || "كابتن"} 🚕</h2>
+          <p>منصة الكباتن - وصلني المنوفية</p>
+        </div>
+
+        <button class="primary-btn big-btn">
+          🚕 الرحلات المتاحة
+        </button>
+
+        <button class="secondary-btn">
+          📋 رحلاتي ككابتن
+        </button>
+
+        <div class="profile-box">
+          <p><strong>نوع السيارة:</strong> ${profile.carType || "-"}</p>
+          <p><strong>الموديل:</strong> ${profile.carModel || "-"}</p>
+          <p><strong>رقم السيارة:</strong> ${profile.carNumber || "-"}</p>
+        </div>
+
+        <button
+          id="logoutBtn"
+          class="danger-btn">
+          تسجيل الخروج
+        </button>
+
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById("logoutBtn").onclick =
+    async () => {
+      await signOut(auth);
+      currentUser = null;
+      currentProfile = null;
+      renderHome();
+    };
+}
+
+/* ======================================================
+   NEW TRIP PAGE
+====================================================== */
+
+function renderNewTripPage() {
+  pickupLocation = null;
+  destinationLocation = null;
+
+  appRoot().innerHTML = `
+    <div class="page-container">
+
+      <button id="backBtn" class="back-btn">
+        ← رجوع
+      </button>
+
+      <div class="trip-card">
+
+        <h2>🚕 رحلة جديدة</h2>
+
+        <div class="input-group">
+          <label>مكان الانطلاق</label>
+
+          <div class="location-row">
+            <input
+              id="pickupAddress"
+              type="text"
+              placeholder="اضغط لتحديد موقعي"
+              readonly
+            />
+
+            <button
+              id="locationBtn"
+              class="location-btn">
+              📍 موقعي
+            </button>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>مكان الوصول</label>
+
+          <button
+            id="chooseDestinationBtn"
+            class="map-select-btn">
+            🗺️ اختر مكان الوصول من الخريطة
+          </button>
+
+          <input
+            id="destinationAddress"
+            type="text"
+            placeholder="لم يتم اختيار الوجهة"
+            readonly
+          />
+        </div>
+
+        <div class="input-group">
+          <label>عدد الركاب</label>
+
+          <select id="passengerCount">
+            ${Array.from(
+              { length: 8 },
+              (_, i) =>
+                `<option value="${i + 1}">
+                  ${i + 1} ${i === 0 ? "راكب" : "ركاب"}
+                </option>`
+            ).join("")}
+          </select>
+        </div>
+
+        <div class="input-group">
+          <label>ملاحظات</label>
+
+          <textarea
+            id="tripNotes"
+            rows="3"
+            placeholder="مثلاً: شنطة كبيرة أو محتاج عربية واسعة">
+          </textarea>
+        </div>
+
+        <div class="input-group">
+          <label>السعر المقترح</label>
+
+          <input
+            id="proposedPrice"
+            type="number"
+            min="1"
+            placeholder="اكتب السعر بالجنيه"
+          />
+        </div>
+
+        <button
+          id="submitTripBtn"
+          class="primary-btn big-btn">
+          🚕 اطلب الرحلة
+        </button>
+
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById("backBtn").onclick =
+    () => renderCustomerHome(currentProfile);
+
+  document.getElementById("locationBtn").onclick =
+    getPickupLocation;
+
+  document.getElementById("chooseDestinationBtn").onclick =
+    openDestinationMap;
+
+  document.getElementById("submitTripBtn").onclick =
+    createTrip;
+}
+
+/* ======================================================
+   GET CURRENT LOCATION
+====================================================== */
+
+async function getPickupLocation() {
+  try {
+    showMessage(
+      "جاري تحديد موقعك...",
+      "info"
+    );
+
+    try {
+      const permissions =
+        await checkPermissions();
+
+      if (
+        permissions.location === "prompt"
+      ) {
+        await requestPermissions();
+      }
+    } catch (permissionError) {
+      console.log(
+        "Capacitor permission check:",
+        permissionError
+      );
+    }
+
+    const position =
+      await getCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 5000
+      });
+
+    pickupLocation = {
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+      address:
+        `موقع العميل (${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)})`
+    };
+
+    const input =
+      document.getElementById("pickupAddress");
+
+    if (input) {
+      input.value =
+        "📍 تم تحديد موقعي الحالي";
+    }
+
+    showMessage(
+      "تم تحديد موقع الانطلاق.",
+      "success"
+    );
+
+  } catch (error) {
+    console.error(error);
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        position => {
+          pickupLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            address:
+              `موقع العميل (${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)})`
+          };
+
+          const input =
+            document.getElementById("pickupAddress");
+
+          if (input) {
+            input.value =
+              "📍 تم تحديد موقعي الحالي";
+          }
+
+          showMessage(
+            "تم تحديد موقع الانطلاق.",
+            "success"
+          );
+        },
+        () => {
+          showMessage(
+            "لم نتمكن من تحديد موقعك. تأكد من تشغيل الموقع والسماح للتطبيق باستخدامه.",
+            "error"
+          );
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 5000
+        }
+      );
 
       return;
     }
 
-    const profile =
-      profileSnap.data();
-
-    if (
-      profile.role === "captain"
-    ) {
-
-      renderCaptainHome(
-        profile
-      );
-
-    } else {
-
-      renderCustomerHome(
-        profile
-      );
-
-    }
-
-  } catch (error) {
-
-    console.error(
-      "OPEN APP ERROR:",
-      error
-    );
-
     showMessage(
-      "تم تسجيل الدخول لكن حصلت مشكلة في تحميل الحساب.",
+      "تعذر الوصول إلى موقع الجهاز.",
       "error"
     );
   }
 }
 
-/* =====================================================
-   CUSTOMER PLATFORM
-   ===================================================== */
+/* ======================================================
+   DESTINATION MAP
+====================================================== */
 
-function renderCustomerHome(
-  profile
-) {
+function openDestinationMap() {
+  appRoot().innerHTML = `
+    <div class="map-page">
 
-  app().innerHTML = `
+      <div class="map-topbar">
 
-    <main class="dashboard">
-
-      <header class="dashboard-header">
-
-        <div>
-
-          <small>
-            أهلاً بيك يا عميل 👤
-          </small>
-
-          <h1>
-            ${escapeHtml(
-              profile.name ||
-              "العميل"
-            )}
-          </h1>
-
-        </div>
-
-        <button
-          id="logoutBtn"
-          class="logout-btn"
-        >
-          خروج
+        <button id="closeMapBtn">
+          ✕
         </button>
 
-      </header>
+        <input
+          id="placeSearch"
+          type="search"
+          placeholder="ابحث عن مدينة، شارع، مستشفى، بنك..."
+        />
 
-      <section class="welcome-card">
-
-        <div class="big-icon">
-          🚕
-        </div>
-
-        <h2>
-          جاهز لمشوارك؟
-        </h2>
-
-        <p>
-          اطلب رحلتك وحدد المكان والسعر اللي يناسبك.
-        </p>
-
-      </section>
-
-      <div class="dashboard-grid">
-
-        <button class="dashboard-btn">
-          📍
-          <span>
-            حدد موقعي
-          </span>
-        </button>
-
-        <button class="dashboard-btn">
-          🗺️
-          <span>
-            حدد الوجهة
-          </span>
-        </button>
-
-        <button class="dashboard-btn">
-          🚗
-          <span>
-            رحلة جديدة
-          </span>
-        </button>
-
-        <button class="dashboard-btn">
-          📋
-          <span>
-            رحلاتي
-          </span>
-        </button>
-
-        <button class="dashboard-btn">
-          🔔
-          <span>
-            الإشعارات
-          </span>
-        </button>
-
-        <button class="dashboard-btn">
-          👤
-          <span>
-            حسابي
-          </span>
+        <button id="searchBtn">
+          🔎
         </button>
 
       </div>
 
-    </main>
+      <div id="destinationMap"></div>
 
-  `;
+      <div class="map-bottom-panel">
 
-  document.getElementById(
-    "logoutBtn"
-  ).onclick = async () => {
-
-    await signOut(auth);
-
-    renderHome();
-
-  };
-}
-
-/* =====================================================
-   CAPTAIN PLATFORM
-   ===================================================== */
-
-function renderCaptainHome(
-  profile
-) {
-
-  app().innerHTML = `
-
-    <main class="dashboard">
-
-      <header class="dashboard-header">
-
-        <div>
-
-          <small>
-            أهلاً يا كابتن 🚕
-          </small>
-
-          <h1>
-            ${escapeHtml(
-              profile.name ||
-              "الكابتن"
-            )}
-          </h1>
-
+        <div id="selectedPlace">
+          حرّك الخريطة وحدد مكان الوصول
         </div>
 
         <button
-          id="logoutBtn"
-          class="logout-btn"
-        >
-          خروج
-        </button>
-
-      </header>
-
-      <section class="captain-status-card">
-
-        <div class="big-icon">
-          🚕
-        </div>
-
-        <h2>
-          منصة الكابتن
-        </h2>
-
-        <p id="captainStatus">
-          غير متاح حاليًا
-        </p>
-
-        <button
-          id="availableBtn"
-          class="available-btn"
-        >
-          🟢 متاح
-        </button>
-
-        <button
-          id="unavailableBtn"
-          class="unavailable-btn"
-        >
-          🔴 غير متاح
-        </button>
-
-      </section>
-
-      <section class="welcome-card">
-
-        <h3>
-          بيانات السيارة
-        </h3>
-
-        <p>
-          النوع:
-          ${escapeHtml(
-            profile.carType ||
-            "-"
-          )}
-        </p>
-
-        <p>
-          الموديل:
-          ${escapeHtml(
-            profile.carModel ||
-            "-"
-          )}
-        </p>
-
-        <p>
-          اللوحة:
-          ${escapeHtml(
-            profile.carNumber ||
-            "-"
-          )}
-        </p>
-
-      </section>
-
-      <div class="dashboard-grid">
-
-        <button class="dashboard-btn">
-          🚕
-          <span>
-            الرحلات المتاحة
-          </span>
-        </button>
-
-        <button class="dashboard-btn">
-          📋
-          <span>
-            رحلاتي ككابتن
-          </span>
-        </button>
-
-        <button class="dashboard-btn">
-          🔔
-          <span>
-            الإشعارات
-          </span>
-        </button>
-
-        <button class="dashboard-btn">
-          👤
-          <span>
-            حسابي
-          </span>
+          id="confirmDestinationBtn"
+          class="primary-btn">
+          تأكيد مكان الوصول
         </button>
 
       </div>
 
-    </main>
-
+    </div>
   `;
 
-  const status =
-    document.getElementById(
-      "captainStatus"
-    );
+  document.getElementById("closeMapBtn").onclick =
+    renderNewTripPage;
 
-  document.getElementById(
-    "availableBtn"
-  ).onclick = () => {
+  document.getElementById("searchBtn").onclick =
+    searchPlace;
 
-    status.textContent =
-      "متاح لاستقبال الرحلات 🟢";
-
-  };
-
-  document.getElementById(
-    "unavailableBtn"
-  ).onclick = () => {
-
-    status.textContent =
-      "غير متاح حاليًا 🔴";
-
-  };
-
-  document.getElementById(
-    "logoutBtn"
-  ).onclick = async () => {
-
-    await signOut(auth);
-
-    renderHome();
-
-  };
-}
-
-/* =====================================================
-   FIREBASE ERRORS
-   ===================================================== */
-
-function firebaseErrorMessage(
-  error
-) {
-
-  const code =
-    error?.code || "";
-
-  const messages = {
-
-    "auth/email-already-in-use":
-      "الحساب ده موجود بالفعل لهذا الدور. جرّب تسجيل الدخول.",
-
-    "auth/invalid-email":
-      "بيانات الحساب غير صحيحة.",
-
-    "auth/weak-password":
-      "كلمة المرور لازم تكون 6 أحرف أو أكثر.",
-
-    "auth/user-not-found":
-      "لا يوجد حساب بهذا الرقم لهذا الدور.",
-
-    "auth/wrong-password":
-      "رقم الهاتف أو كلمة المرور غير صحيحة.",
-
-    "auth/invalid-credential":
-      "رقم الهاتف أو كلمة المرور غير صحيحة.",
-
-    "auth/too-many-requests":
-      "تمت محاولات كثيرة. حاول مرة أخرى لاحقًا.",
-
-    "auth/network-request-failed":
-      "تأكد من اتصال الإنترنت.",
-
-    "auth/operation-not-allowed":
-      "Email/Password غير مفعّل في Firebase.",
-
-    "auth/invalid-api-key":
-      "مفتاح Firebase غير صحيح.",
-
-    "auth/project-not-found":
-      "مشروع Firebase غير موجود أو الإعدادات غير صحيحة."
-
-  };
-
-  return (
-    messages[code] ||
-    `حدث خطأ أثناء العملية. (${code || "unknown"})`
+  document.getElementById("placeSearch").addEventListener(
+    "keydown",
+    event => {
+      if (event.key === "Enter") {
+        searchPlace();
+      }
+    }
   );
+
+  document
+    .getElementById("confirmDestinationBtn")
+    .onclick = confirmDestination;
+
+  setTimeout(() => {
+    initializeDestinationMap();
+  }, 100);
 }
 
-/* =====================================================
-   ESCAPE HTML
-   ===================================================== */
+/* ======================================================
+   INITIALIZE MAP
+====================================================== */
 
-function escapeHtml(
-  value
-) {
+function initializeDestinationMap() {
+  let center = [
+    30.5526,
+    31.0106
+  ];
 
-  return String(value)
+  let zoom = 7;
 
-    .replaceAll(
-      "&",
-      "&amp;"
-    )
+  if (pickupLocation) {
+    center = [
+      pickupLocation.lat,
+      pickupLocation.lng
+    ];
 
-    .replaceAll(
-      "<",
-      "&lt;"
-    )
+    zoom = 15;
+  }
 
-    .replaceAll(
-      ">",
-      "&gt;"
-    )
+  tripMap = L.map(
+    "destinationMap",
+    {
+      zoomControl: true,
+      attributionControl: true
+    }
+  ).setView(center, zoom);
 
-    .replaceAll(
-      '"',
-      "&quot;"
-    )
+  L.tileLayer(
+    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+      maxZoom: 19,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>'
+    }
+  ).addTo(tripMap);
 
-    .replaceAll(
-      "'",
-      "&#039;"
+  if (pickupLocation) {
+    pickupMarker = L.marker([
+      pickupLocation.lat,
+      pickupLocation.lng
+    ])
+      .addTo(tripMap)
+      .bindPopup("📍 مكان الانطلاق")
+      .openPopup();
+  }
+
+  tripMap.on(
+    "moveend",
+    updateMapCenter
+  );
+
+  updateMapCenter();
+}
+
+/* ======================================================
+   MAP CENTER
+====================================================== */
+
+async function updateMapCenter() {
+  if (!tripMap) return;
+
+  const center =
+    tripMap.getCenter();
+
+  const lat =
+    center.lat;
+
+  const lng =
+    center.lng;
+
+  destinationLocation = {
+    lat,
+    lng,
+    address:
+      `نقطة على الخريطة (${lat.toFixed(6)}, ${lng.toFixed(6)})`
+  };
+
+  const selected =
+    document.getElementById("selectedPlace");
+
+  if (selected) {
+    selected.textContent =
+      `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  }
+}
+
+/* ======================================================
+   SEARCH PLACE
+====================================================== */
+
+async function searchPlace() {
+  const input =
+    document.getElementById("placeSearch");
+
+  const query =
+    input?.value.trim();
+
+  if (!query) {
+    showMessage(
+      "اكتب اسم المكان أولاً.",
+      "error"
     );
+    return;
+  }
+
+  try {
+    showMessage(
+      "جاري البحث عن المكان...",
+      "info"
+    );
+
+    const url =
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=ar&q=${encodeURIComponent(query)}`;
+
+    const response =
+      await fetch(url);
+
+    if (!response.ok) {
+      throw new Error("SEARCH_FAILED");
+    }
+
+    const results =
+      await response.json();
+
+    if (!results.length) {
+      showMessage(
+        "لم يتم العثور على المكان.",
+        "error"
+      );
+      return;
+    }
+
+    const first =
+      results[0];
+
+    const lat =
+      Number(first.lat);
+
+    const lng =
+      Number(first.lon);
+
+    tripMap.setView(
+      [lat, lng],
+      17,
+      {
+        animate: true
+      }
+    );
+
+    destinationLocation = {
+      lat,
+      lng,
+      address:
+        first.display_name
+    };
+
+    const selected =
+      document.getElementById("selectedPlace");
+
+    if (selected) {
+      selected.textContent =
+        `📍 ${first.display_name}`;
+    }
+
+    showMessage(
+      "تم العثور على المكان. يمكنك تحريك الخريطة للتحديد بدقة.",
+      "success"
+    );
+
+  } catch (error) {
+    console.error(error);
+
+    showMessage(
+      "حصل خطأ أثناء البحث عن المكان.",
+      "error"
+    );
+  }
 }
 
-/* =====================================================
+/* ======================================================
+   CONFIRM DESTINATION
+====================================================== */
+
+async function confirmDestination() {
+  if (!destinationLocation) {
+    showMessage(
+      "حدد مكان الوصول أولاً.",
+      "error"
+    );
+    return;
+  }
+
+  try {
+    const lat =
+      destinationLocation.lat;
+
+    const lng =
+      destinationLocation.lng;
+
+    const url =
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=ar&lat=${lat}&lon=${lng}`;
+
+    const response =
+      await fetch(url);
+
+    if (response.ok) {
+      const data =
+        await response.json();
+
+      destinationLocation.address =
+        data.display_name ||
+        destinationLocation.address;
+    }
+  } catch (error) {
+    console.log(
+      "Reverse geocoding failed",
+      error
+    );
+  }
+
+  renderNewTripPage();
+
+  const destinationInput =
+    document.getElementById("destinationAddress");
+
+  if (destinationInput) {
+    destinationInput.value =
+      destinationLocation.address;
+  }
+}
+
+/* ======================================================
+   CREATE TRIP
+====================================================== */
+
+async function createTrip() {
+  if (!currentUser || !currentProfile) {
+    showMessage(
+      "يجب تسجيل الدخول أولاً.",
+      "error"
+    );
+    return;
+  }
+
+  if (!pickupLocation) {
+    showMessage(
+      "حدد مكان الانطلاق أولاً.",
+      "error"
+    );
+    return;
+  }
+
+  if (!destinationLocation) {
+    showMessage(
+      "حدد مكان الوصول أولاً.",
+      "error"
+    );
+    return;
+  }
+
+  const passengerCount =
+    Number(
+      document.getElementById("passengerCount")?.value
+    );
+
+  const notes =
+    document.getElementById("tripNotes")?.value.trim() || "";
+
+  const proposedPrice =
+    Number(
+      document.getElementById("proposedPrice")?.value
+    );
+
+  if (!passengerCount) {
+    showMessage(
+      "حدد عدد الركاب.",
+      "error"
+    );
+    return;
+  }
+
+  if (!proposedPrice || proposedPrice <= 0) {
+    showMessage(
+      "اكتب السعر المقترح.",
+      "error"
+    );
+    return;
+  }
+
+  try {
+    const button =
+      document.getElementById("submitTripBtn");
+
+    if (button) {
+      button.disabled = true;
+      button.textContent =
+        "جاري إرسال الرحلة...";
+    }
+
+    const tripData = {
+      customerId: currentUser.uid,
+
+      customerName:
+        currentProfile.name || "",
+
+      customerPhone:
+        currentProfile.phone || "",
+
+      pickup: {
+        lat: pickupLocation.lat,
+        lng: pickupLocation.lng,
+        address: pickupLocation.address || ""
+      },
+
+      destination: {
+        lat: destinationLocation.lat,
+        lng: destinationLocation.lng,
+        address: destinationLocation.address || ""
+      },
+
+      passengerCount,
+
+      notes,
+
+      proposedPrice,
+
+      status: "open",
+
+      createdAt: serverTimestamp()
+    };
+
+    const tripRef =
+      await addDoc(
+        collection(db, "trips"),
+        tripData
+      );
+
+    console.log(
+      "Trip created:",
+      tripRef.id
+    );
+
+    appRoot().innerHTML = `
+      <div class="page-container">
+
+        <div class="success-card">
+
+          <div class="success-icon">
+            ✓
+          </div>
+
+          <h2>
+            تم طلب الرحلة
+          </h2>
+
+          <p>
+            رحلتك ظهرت الآن للكباتن.
+          </p>
+
+          <p>
+            السعر المقترح:
+            <strong>
+              ${proposedPrice} جنيه
+            </strong>
+          </p>
+
+          <button
+            id="backHomeBtn"
+            class="primary-btn">
+            العودة للرئيسية
+          </button>
+
+        </div>
+
+      </div>
+    `;
+
+    document.getElementById("backHomeBtn").onclick =
+      () => renderCustomerHome(currentProfile);
+
+  } catch (error) {
+    console.error(error);
+
+    const button =
+      document.getElementById("submitTripBtn");
+
+    if (button) {
+      button.disabled = false;
+      button.textContent =
+        "🚕 اطلب الرحلة";
+    }
+
+    showMessage(
+      "لم يتم إرسال الرحلة. تأكد من اتصال الإنترنت.",
+      "error"
+    );
+  }
+}
+
+/* ======================================================
    AUTH STATE
-   ===================================================== */
+====================================================== */
 
 onAuthStateChanged(
   auth,
-  async (user) => {
+  async user => {
 
     if (!user) {
-
-      renderHome();
+      if (!currentUser) {
+        renderHome();
+      }
 
       return;
     }
 
-    try {
+    currentUser = user;
 
+    try {
       const profileSnap =
         await getDoc(
-          doc(
-            db,
-            "users",
-            user.uid
-          )
+          doc(db, "users", user.uid)
         );
 
-      if (
-        profileSnap.exists()
-      ) {
-
-        openUserApp(
-          user
-        );
-
-      } else {
-
-        await signOut(
-          auth
-        );
-
+      if (!profileSnap.exists()) {
         renderHome();
+        return;
+      }
 
+      currentProfile =
+        profileSnap.data();
+
+      if (currentProfile.role === "captain") {
+        renderCaptainHome(currentProfile);
+      } else {
+        renderCustomerHome(currentProfile);
       }
 
     } catch (error) {
-
-      console.error(
-        "AUTH STATE ERROR:",
-        error
-      );
-
+      console.error(error);
       renderHome();
-
     }
-
   }
 );
-
-/* =====================================================
-   START
-   ===================================================== */
-
-renderHome();
