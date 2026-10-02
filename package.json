@@ -16,5 +16,9 @@
     "leaflet": "^1.9.4",
     "vite": "^7.0.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.0.0"
+  }
 }
