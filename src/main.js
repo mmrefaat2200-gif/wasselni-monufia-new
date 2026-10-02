@@ -23,8 +23,6 @@ import {
   serverTimestamp
 } from "firebase/firestore";
 
-import { getCurrentPosition } from "@capacitor/geolocation";
-
 /* ======================================================
    FIREBASE
 ====================================================== */
@@ -48,6 +46,7 @@ const db = getFirestore(app);
 
 let currentUser = null;
 let currentProfile = null;
+
 let selectedRole = "customer";
 
 let pickupLocation = null;
@@ -66,18 +65,22 @@ function appRoot() {
 
 function showMessage(message, type = "info") {
   const old = document.querySelector(".app-message");
-  if (old) old.remove();
+
+  if (old) {
+    old.remove();
+  }
 
   const box = document.createElement("div");
 
   box.className = `app-message ${type}`;
-
   box.textContent = message;
 
   appRoot().prepend(box);
 
   setTimeout(() => {
-    box.remove();
+    if (box.parentNode) {
+      box.remove();
+    }
   }, 4000);
 }
 
@@ -132,7 +135,7 @@ function firebaseErrorMessage(error) {
       "الحساب موجود بالفعل.",
 
     "auth/weak-password":
-      "كلمة المرور ضعيفة.",
+      "كلمة المرور ضعيفة. استخدم 6 أحرف على الأقل.",
 
     "auth/invalid-email":
       "بيانات الحساب غير صحيحة.",
@@ -141,11 +144,16 @@ function firebaseErrorMessage(error) {
       "الحساب غير موجود.",
 
     "auth/wrong-password":
-      "كلمة المرور غير صحيحة."
+      "كلمة المرور غير صحيحة.",
+
+    "auth/network-request-failed":
+      "تأكد من اتصال الإنترنت."
   };
 
-  return messages[code] ||
-    `حدث خطأ أثناء العملية. (${code})`;
+  return (
+    messages[code] ||
+    `حدث خطأ أثناء العملية. (${code})`
+  );
 }
 
 /* ======================================================
@@ -163,15 +171,21 @@ function renderHome() {
 
       <div class="home-card">
 
-        <button id="customerLoginBtn" class="primary-btn">
+        <button
+          id="customerLoginBtn"
+          class="primary-btn">
           👤 الدخول كعميل
         </button>
 
-        <button id="captainLoginBtn" class="secondary-btn">
+        <button
+          id="captainLoginBtn"
+          class="secondary-btn">
           🚕 الدخول ككابتن
         </button>
 
-        <button id="registerBtn" class="secondary-btn">
+        <button
+          id="registerBtn"
+          class="secondary-btn">
           إنشاء حساب جديد
         </button>
 
@@ -180,56 +194,83 @@ function renderHome() {
     </div>
   `;
 
-  document.getElementById("customerLoginBtn").onclick =
-    () => renderAuth("customer", "login");
+  document.getElementById(
+    "customerLoginBtn"
+  ).onclick = () =>
+    renderAuth("customer", "login");
 
-  document.getElementById("captainLoginBtn").onclick =
-    () => renderAuth("captain", "login");
+  document.getElementById(
+    "captainLoginBtn"
+  ).onclick = () =>
+    renderAuth("captain", "login");
 
-  document.getElementById("registerBtn").onclick =
-    () => renderAuth("customer", "register");
+  document.getElementById(
+    "registerBtn"
+  ).onclick = () =>
+    renderAuth("customer", "register");
 }
 
 /* ======================================================
    AUTH
 ====================================================== */
 
-function renderAuth(role = "customer", mode = "login") {
+function renderAuth(
+  role = "customer",
+  mode = "login"
+) {
   selectedRole = role;
 
-  const isRegister = mode === "register";
+  const isRegister =
+    mode === "register";
 
   appRoot().innerHTML = `
     <div class="page-container">
 
-      <button id="backBtn" class="back-btn">
+      <button
+        id="backBtn"
+        class="back-btn">
         ← رجوع
       </button>
 
       <div class="auth-card">
 
         <h2>
-          ${isRegister ? "إنشاء حساب جديد" : "تسجيل الدخول"}
+          ${
+            isRegister
+              ? "إنشاء حساب جديد"
+              : "تسجيل الدخول"
+          }
         </h2>
 
         <div class="role-switch">
 
           <button
             id="customerRoleBtn"
-            class="${role === "customer" ? "active" : ""}">
+            class="${
+              role === "customer"
+                ? "active"
+                : ""
+            }">
             👤 عميل
           </button>
 
           <button
             id="captainRoleBtn"
-            class="${role === "captain" ? "active" : ""}">
+            class="${
+              role === "captain"
+                ? "active"
+                : ""
+            }">
             🚕 كابتن
           </button>
 
         </div>
 
         <div class="input-group">
-          <label>رقم الهاتف</label>
+
+          <label>
+            رقم الهاتف
+          </label>
 
           <input
             id="phoneInput"
@@ -237,6 +278,7 @@ function renderAuth(role = "customer", mode = "login") {
             inputmode="numeric"
             placeholder="01xxxxxxxxx"
           />
+
         </div>
 
         ${
@@ -244,7 +286,9 @@ function renderAuth(role = "customer", mode = "login") {
             ? `
               <div class="input-group">
 
-                <label>الاسم بالكامل</label>
+                <label>
+                  الاسم بالكامل
+                </label>
 
                 <input
                   id="nameInput"
@@ -258,11 +302,14 @@ function renderAuth(role = "customer", mode = "login") {
         }
 
         ${
-          isRegister && role === "captain"
+          isRegister &&
+          role === "captain"
             ? `
               <div class="input-group">
 
-                <label>نوع السيارة</label>
+                <label>
+                  نوع السيارة
+                </label>
 
                 <input
                   id="carTypeInput"
@@ -274,7 +321,9 @@ function renderAuth(role = "customer", mode = "login") {
 
               <div class="input-group">
 
-                <label>موديل السيارة</label>
+                <label>
+                  موديل السيارة
+                </label>
 
                 <input
                   id="carModelInput"
@@ -286,7 +335,9 @@ function renderAuth(role = "customer", mode = "login") {
 
               <div class="input-group">
 
-                <label>رقم السيارة</label>
+                <label>
+                  رقم السيارة
+                </label>
 
                 <input
                   id="carNumberInput"
@@ -301,7 +352,9 @@ function renderAuth(role = "customer", mode = "login") {
 
         <div class="input-group">
 
-          <label>كلمة المرور</label>
+          <label>
+            كلمة المرور
+          </label>
 
           <input
             id="passwordInput"
@@ -311,8 +364,14 @@ function renderAuth(role = "customer", mode = "login") {
 
         </div>
 
-        <button id="authBtn" class="primary-btn">
-          ${isRegister ? "إنشاء الحساب" : "دخول"}
+        <button
+          id="authBtn"
+          class="primary-btn">
+          ${
+            isRegister
+              ? "إنشاء الحساب"
+              : "دخول"
+          }
         </button>
 
         ${
@@ -334,29 +393,53 @@ function renderAuth(role = "customer", mode = "login") {
         }
 
       </div>
+
     </div>
   `;
 
-  document.getElementById("backBtn").onclick =
-    renderHome;
+  document.getElementById(
+    "backBtn"
+  ).onclick = renderHome;
 
-  document.getElementById("customerRoleBtn").onclick =
-    () => renderAuth("customer", mode);
+  document.getElementById(
+    "customerRoleBtn"
+  ).onclick = () =>
+    renderAuth(
+      "customer",
+      mode
+    );
 
-  document.getElementById("captainRoleBtn").onclick =
-    () => renderAuth("captain", mode);
+  document.getElementById(
+    "captainRoleBtn"
+  ).onclick = () =>
+    renderAuth(
+      "captain",
+      mode
+    );
 
-  document.getElementById("authBtn").onclick =
-    () => isRegister
+  document.getElementById(
+    "authBtn"
+  ).onclick = () =>
+    isRegister
       ? registerAccount()
       : loginAccount();
 
   if (isRegister) {
-    document.getElementById("loginInsteadBtn").onclick =
-      () => renderAuth(role, "login");
+    document.getElementById(
+      "loginInsteadBtn"
+    ).onclick = () =>
+      renderAuth(
+        role,
+        "login"
+      );
   } else {
-    document.getElementById("registerInsteadBtn").onclick =
-      () => renderAuth(role, "register");
+    document.getElementById(
+      "registerInsteadBtn"
+    ).onclick = () =>
+      renderAuth(
+        role,
+        "register"
+      );
   }
 }
 
@@ -365,21 +448,29 @@ function renderAuth(role = "customer", mode = "login") {
 ====================================================== */
 
 async function registerAccount() {
-  const phone = normalizeEgyptPhone(
-    document.getElementById("phoneInput")?.value
-  );
+  const phone =
+    normalizeEgyptPhone(
+      document.getElementById(
+        "phoneInput"
+      )?.value
+    );
 
   const password =
-    document.getElementById("passwordInput")?.value || "";
+    document.getElementById(
+      "passwordInput"
+    )?.value || "";
 
   const name =
-    document.getElementById("nameInput")?.value.trim() || "";
+    document.getElementById(
+      "nameInput"
+    )?.value.trim() || "";
 
   if (!isValidEgyptPhone(phone)) {
     showMessage(
       "اكتب رقم هاتف مصري صحيح.",
       "error"
     );
+
     return;
   }
 
@@ -388,6 +479,7 @@ async function registerAccount() {
       "كلمة المرور يجب أن تكون 6 أحرف على الأقل.",
       "error"
     );
+
     return;
   }
 
@@ -396,6 +488,7 @@ async function registerAccount() {
       "اكتب الاسم بالكامل.",
       "error"
     );
+
     return;
   }
 
@@ -406,7 +499,9 @@ async function registerAccount() {
     );
 
   try {
-    loading("جاري إنشاء الحساب...");
+    loading(
+      "جاري إنشاء الحساب..."
+    );
 
     const result =
       await createUserWithEmailAndPassword(
@@ -417,43 +512,68 @@ async function registerAccount() {
 
     const profile = {
       uid: result.user.uid,
+
       phone,
+
       name,
+
       role: selectedRole,
-      createdAt: serverTimestamp()
+
+      createdAt:
+        serverTimestamp()
     };
 
-    if (selectedRole === "captain") {
+    if (
+      selectedRole ===
+      "captain"
+    ) {
       profile.carType =
-        document.getElementById("carTypeInput")
-          ?.value.trim() || "";
+        document.getElementById(
+          "carTypeInput"
+        )?.value.trim() || "";
 
       profile.carModel =
-        document.getElementById("carModelInput")
-          ?.value.trim() || "";
+        document.getElementById(
+          "carModelInput"
+        )?.value.trim() || "";
 
       profile.carNumber =
-        document.getElementById("carNumberInput")
-          ?.value.trim() || "";
+        document.getElementById(
+          "carNumberInput"
+        )?.value.trim() || "";
     }
 
     await setDoc(
-      doc(db, "users", result.user.uid),
+      doc(
+        db,
+        "users",
+        result.user.uid
+      ),
       profile
     );
 
-    currentUser = result.user;
-    currentProfile = profile;
+    currentUser =
+      result.user;
+
+    currentProfile =
+      profile;
 
     showMessage(
       "تم إنشاء الحساب بنجاح.",
       "success"
     );
 
-    if (selectedRole === "captain") {
-      renderCaptainHome(profile);
+    if (
+      selectedRole ===
+      "captain"
+    ) {
+      renderCaptainHome(
+        profile
+      );
     } else {
-      renderCustomerHome(profile);
+      renderCustomerHome(
+        profile
+      );
     }
 
   } catch (error) {
@@ -476,18 +596,24 @@ async function registerAccount() {
 ====================================================== */
 
 async function loginAccount() {
-  const phone = normalizeEgyptPhone(
-    document.getElementById("phoneInput")?.value
-  );
+  const phone =
+    normalizeEgyptPhone(
+      document.getElementById(
+        "phoneInput"
+      )?.value
+    );
 
   const password =
-    document.getElementById("passwordInput")?.value || "";
+    document.getElementById(
+      "passwordInput"
+    )?.value || "";
 
   if (!isValidEgyptPhone(phone)) {
     showMessage(
       "اكتب رقم هاتف مصري صحيح.",
       "error"
     );
+
     return;
   }
 
@@ -496,6 +622,7 @@ async function loginAccount() {
       "اكتب كلمة المرور.",
       "error"
     );
+
     return;
   }
 
@@ -506,7 +633,9 @@ async function loginAccount() {
     );
 
   try {
-    loading("جاري تسجيل الدخول...");
+    loading(
+      "جاري تسجيل الدخول..."
+    );
 
     const result =
       await signInWithEmailAndPassword(
@@ -515,11 +644,16 @@ async function loginAccount() {
         password
       );
 
-    currentUser = result.user;
+    currentUser =
+      result.user;
 
     const profileSnap =
       await getDoc(
-        doc(db, "users", result.user.uid)
+        doc(
+          db,
+          "users",
+          result.user.uid
+        )
       );
 
     if (!profileSnap.exists()) {
@@ -547,7 +681,10 @@ async function loginAccount() {
       return;
     }
 
-    if (selectedRole === "captain") {
+    if (
+      selectedRole ===
+      "captain"
+    ) {
       renderCaptainHome(
         currentProfile
       );
@@ -561,9 +698,12 @@ async function loginAccount() {
     console.error(error);
 
     showMessage(
-      error.message === "PROFILE_NOT_FOUND"
+      error.message ===
+        "PROFILE_NOT_FOUND"
         ? "بيانات الحساب غير موجودة."
-        : firebaseErrorMessage(error),
+        : firebaseErrorMessage(
+            error
+          ),
       "error"
     );
 
@@ -578,7 +718,9 @@ async function loginAccount() {
    CUSTOMER HOME
 ====================================================== */
 
-function renderCustomerHome(profile) {
+function renderCustomerHome(
+  profile
+) {
   appRoot().innerHTML = `
     <div class="page-container">
 
@@ -587,7 +729,10 @@ function renderCustomerHome(profile) {
         <div class="dashboard-header">
 
           <h2>
-            أهلاً ${profile.name || "بك"} 👋
+            أهلاً ${
+              profile.name ||
+              "بك"
+            } 👋
           </h2>
 
           <p>
@@ -625,31 +770,41 @@ function renderCustomerHome(profile) {
     </div>
   `;
 
-  document.getElementById("newTripBtn").onclick =
-    renderNewTripPage;
+  document.getElementById(
+    "newTripBtn"
+  ).onclick =
+    () =>
+      renderNewTripPage();
 
-  document.getElementById("myTripsBtn").onclick =
-    () => {
-      showMessage(
-        "قسم رحلاتي هنضيفه بعد شاشة الرحلة.",
-        "info"
-      );
-    };
+  document.getElementById(
+    "myTripsBtn"
+  ).onclick = () => {
+    showMessage(
+      "قسم رحلاتي هنضيفه بعد شاشة الرحلة.",
+      "info"
+    );
+  };
 
-  document.getElementById("accountBtn").onclick =
-    () => {
-      showMessage(
-        `رقم الهاتف: ${profile.phone}`,
-        "info"
-      );
-    };
+  document.getElementById(
+    "accountBtn"
+  ).onclick = () => {
+    showMessage(
+      `رقم الهاتف: ${profile.phone}`,
+      "info"
+    );
+  };
 
-  document.getElementById("logoutBtn").onclick =
+  document.getElementById(
+    "logoutBtn"
+  ).onclick =
     async () => {
       await signOut(auth);
 
       currentUser = null;
       currentProfile = null;
+
+      pickupLocation = null;
+      destinationLocation = null;
 
       renderHome();
     };
@@ -659,7 +814,9 @@ function renderCustomerHome(profile) {
    CAPTAIN HOME
 ====================================================== */
 
-function renderCaptainHome(profile) {
+function renderCaptainHome(
+  profile
+) {
   appRoot().innerHTML = `
     <div class="page-container">
 
@@ -668,7 +825,10 @@ function renderCaptainHome(profile) {
         <div class="dashboard-header">
 
           <h2>
-            أهلاً ${profile.name || "كابتن"} 🚕
+            أهلاً ${
+              profile.name ||
+              "كابتن"
+            } 🚕
           </h2>
 
           <p>
@@ -692,18 +852,33 @@ function renderCaptainHome(profile) {
         <div class="profile-box">
 
           <p>
-            <strong>نوع السيارة:</strong>
-            ${profile.carType || "-"}
+            <strong>
+              نوع السيارة:
+            </strong>
+            ${
+              profile.carType ||
+              "-"
+            }
           </p>
 
           <p>
-            <strong>الموديل:</strong>
-            ${profile.carModel || "-"}
+            <strong>
+              الموديل:
+            </strong>
+            ${
+              profile.carModel ||
+              "-"
+            }
           </p>
 
           <p>
-            <strong>رقم السيارة:</strong>
-            ${profile.carNumber || "-"}
+            <strong>
+              رقم السيارة:
+            </strong>
+            ${
+              profile.carNumber ||
+              "-"
+            }
           </p>
 
         </div>
@@ -737,7 +912,9 @@ function renderCaptainHome(profile) {
     );
   };
 
-  document.getElementById("logoutBtn").onclick =
+  document.getElementById(
+    "logoutBtn"
+  ).onclick =
     async () => {
       await signOut(auth);
 
@@ -749,7 +926,7 @@ function renderCaptainHome(profile) {
 }
 
 /* ======================================================
-   NEW TRIP PAGE
+   NEW TRIP
 ====================================================== */
 
 function renderNewTripPage(
@@ -827,14 +1004,20 @@ function renderNewTripPage(
             عدد الركاب
           </label>
 
-          <select id="passengerCount">
+          <select
+            id="passengerCount">
 
             ${Array.from(
               { length: 8 },
               (_, i) => `
-                <option value="${i + 1}">
+                <option
+                  value="${i + 1}">
                   ${i + 1}
-                  ${i === 0 ? "راكب" : "ركاب"}
+                  ${
+                    i === 0
+                      ? "راكب"
+                      : "ركاب"
+                  }
                 </option>
               `
             ).join("")}
@@ -886,9 +1069,10 @@ function renderNewTripPage(
   document.getElementById(
     "backBtn"
   ).onclick =
-    () => renderCustomerHome(
-      currentProfile
-    );
+    () =>
+      renderCustomerHome(
+        currentProfile
+      );
 
   document.getElementById(
     "locationBtn"
@@ -925,13 +1109,15 @@ function renderNewTripPage(
 
     if (destinationInput) {
       destinationInput.value =
-        destinationLocation.address || "";
+        destinationLocation.address ||
+        "";
     }
   }
 }
 
 /* ======================================================
-   GET CURRENT LOCATION
+   CURRENT LOCATION
+   NO CAPACITOR GEOLOCATION
 ====================================================== */
 
 async function getPickupLocation() {
@@ -941,96 +1127,106 @@ async function getPickupLocation() {
       "info"
     );
 
-    const position =
-      await getCurrentPosition({
-        enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 5000
-      });
-
-    pickupLocation = {
-      lat: position.coords.latitude,
-      lng: position.coords.longitude,
-      address:
-        `موقع العميل (${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)})`
-    };
-
-    const input =
-      document.getElementById(
-        "pickupAddress"
-      );
-
-    if (input) {
-      input.value =
-        "📍 تم تحديد موقعي الحالي";
-    }
-
-    showMessage(
-      "تم تحديد موقع الانطلاق.",
-      "success"
-    );
-
-  } catch (error) {
-    console.error(
-      "Capacitor Geolocation error:",
-      error
-    );
-
-    /*
-      fallback للمتصفح
-    */
-
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        position => {
-
-          pickupLocation = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            address:
-              `موقع العميل (${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)})`
-          };
-
-          const input =
-            document.getElementById(
-              "pickupAddress"
-            );
-
-          if (input) {
-            input.value =
-              "📍 تم تحديد موقعي الحالي";
-          }
-
-          showMessage(
-            "تم تحديد موقع الانطلاق.",
-            "success"
-          );
-        },
-
-        browserError => {
-          console.error(
-            "Browser geolocation error:",
-            browserError
-          );
-
-          showMessage(
-            "لم نتمكن من تحديد موقعك. تأكد من تشغيل GPS والسماح للتطبيق باستخدام الموقع.",
-            "error"
-          );
-        },
-
-        {
-          enableHighAccuracy: true,
-          timeout: 20000,
-          maximumAge: 5000
-        }
+    if (
+      !navigator.geolocation
+    ) {
+      showMessage(
+        "الموقع غير مدعوم على الجهاز.",
+        "error"
       );
 
       return;
     }
 
+    navigator.geolocation.getCurrentPosition(
+
+      async (position) => {
+
+        const lat =
+          position.coords.latitude;
+
+        const lng =
+          position.coords.longitude;
+
+        pickupLocation = {
+          lat,
+          lng,
+          address:
+            `موقع العميل (${lat.toFixed(
+              6
+            )}, ${lng.toFixed(
+              6
+            )})`
+        };
+
+        const input =
+          document.getElementById(
+            "pickupAddress"
+          );
+
+        if (input) {
+          input.value =
+            "📍 تم تحديد موقعي الحالي";
+        }
+
+        showMessage(
+          "تم تحديد موقع الانطلاق بنجاح.",
+          "success"
+        );
+      },
+
+      (error) => {
+
+        console.error(
+          "Geolocation error:",
+          error
+        );
+
+        let message =
+          "لم نتمكن من تحديد موقعك.";
+
+        if (
+          error.code === 1
+        ) {
+          message =
+            "اسمح للتطبيق باستخدام الموقع من إعدادات الهاتف.";
+        }
+
+        else if (
+          error.code === 2
+        ) {
+          message =
+            "تعذر تحديد موقعك. شغّل GPS وحاول مرة أخرى.";
+        }
+
+        else if (
+          error.code === 3
+        ) {
+          message =
+            "انتهى وقت تحديد الموقع. تأكد من تشغيل GPS وحاول مرة أخرى.";
+        }
+
+        showMessage(
+          message,
+          "error"
+        );
+      },
+
+      {
+        enableHighAccuracy: true,
+
+        timeout: 20000,
+
+        maximumAge: 5000
+      }
+    );
+
+  } catch (error) {
+
+    console.error(error);
+
     showMessage(
-      "تعذر الوصول إلى موقع الجهاز.",
+      "حدث خطأ أثناء تحديد موقعك.",
       "error"
     );
   }
@@ -1041,6 +1237,7 @@ async function getPickupLocation() {
 ====================================================== */
 
 function openDestinationMap() {
+
   appRoot().innerHTML = `
     <div class="map-page">
 
@@ -1064,11 +1261,15 @@ function openDestinationMap() {
 
       </div>
 
-      <div id="destinationMap"></div>
+      <div
+        id="destinationMap">
+      </div>
 
-      <div class="map-bottom-panel">
+      <div
+        class="map-bottom-panel">
 
-        <div id="selectedPlace">
+        <div
+          id="selectedPlace">
           حرّك الخريطة وحدد مكان الوصول
         </div>
 
@@ -1086,6 +1287,18 @@ function openDestinationMap() {
   document.getElementById(
     "closeMapBtn"
   ).onclick = () => {
+
+    if (tripMap) {
+      try {
+        tripMap.remove();
+      } catch (e) {
+        console.log(e);
+      }
+
+      tripMap = null;
+      pickupMarker = null;
+    }
+
     renderNewTripPage(true);
   };
 
@@ -1098,8 +1311,12 @@ function openDestinationMap() {
     "placeSearch"
   ).addEventListener(
     "keydown",
-    event => {
-      if (event.key === "Enter") {
+    (event) => {
+
+      if (
+        event.key ===
+        "Enter"
+      ) {
         searchPlace();
       }
     }
@@ -1110,9 +1327,12 @@ function openDestinationMap() {
   ).onclick =
     confirmDestination;
 
-  setTimeout(() => {
-    initializeDestinationMap();
-  }, 100);
+  setTimeout(
+    () => {
+      initializeDestinationMap();
+    },
+    100
+  );
 }
 
 /* ======================================================
@@ -1120,6 +1340,7 @@ function openDestinationMap() {
 ====================================================== */
 
 function initializeDestinationMap() {
+
   let center = [
     30.5526,
     31.0106
@@ -1128,6 +1349,7 @@ function initializeDestinationMap() {
   let zoom = 7;
 
   if (pickupLocation) {
+
     center = [
       pickupLocation.lat,
       pickupLocation.lng
@@ -1156,9 +1378,12 @@ function initializeDestinationMap() {
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>'
     }
-  ).addTo(tripMap);
+  ).addTo(
+    tripMap
+  );
 
   if (pickupLocation) {
+
     pickupMarker =
       L.marker([
         pickupLocation.lat,
@@ -1184,7 +1409,10 @@ function initializeDestinationMap() {
 ====================================================== */
 
 function updateMapCenter() {
-  if (!tripMap) return;
+
+  if (!tripMap) {
+    return;
+  }
 
   const center =
     tripMap.getCenter();
@@ -1199,7 +1427,11 @@ function updateMapCenter() {
     lat,
     lng,
     address:
-      `نقطة على الخريطة (${lat.toFixed(6)}, ${lng.toFixed(6)})`
+      `نقطة على الخريطة (${lat.toFixed(
+        6
+      )}, ${lng.toFixed(
+        6
+      )})`
   };
 
   const selected =
@@ -1209,7 +1441,11 @@ function updateMapCenter() {
 
   if (selected) {
     selected.textContent =
-      `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      `📍 ${lat.toFixed(
+        6
+      )}, ${lng.toFixed(
+        6
+      )}`;
   }
 }
 
@@ -1218,6 +1454,7 @@ function updateMapCenter() {
 ====================================================== */
 
 async function searchPlace() {
+
   const input =
     document.getElementById(
       "placeSearch"
@@ -1227,6 +1464,7 @@ async function searchPlace() {
     input?.value.trim();
 
   if (!query) {
+
     showMessage(
       "اكتب اسم المكان أولاً.",
       "error"
@@ -1236,13 +1474,16 @@ async function searchPlace() {
   }
 
   try {
+
     showMessage(
       "جاري البحث عن المكان...",
       "info"
     );
 
     const url =
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=ar&q=${encodeURIComponent(query)}`;
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=ar&q=${encodeURIComponent(
+        query
+      )}`;
 
     const response =
       await fetch(url);
@@ -1256,7 +1497,10 @@ async function searchPlace() {
     const results =
       await response.json();
 
-    if (!results.length) {
+    if (
+      !results.length
+    ) {
+
       showMessage(
         "لم يتم العثور على المكان.",
         "error"
@@ -1275,7 +1519,10 @@ async function searchPlace() {
       Number(first.lon);
 
     tripMap.setView(
-      [lat, lng],
+      [
+        lat,
+        lng
+      ],
       17,
       {
         animate: true
@@ -1305,6 +1552,7 @@ async function searchPlace() {
     );
 
   } catch (error) {
+
     console.error(error);
 
     showMessage(
@@ -1319,7 +1567,11 @@ async function searchPlace() {
 ====================================================== */
 
 async function confirmDestination() {
-  if (!destinationLocation) {
+
+  if (
+    !destinationLocation
+  ) {
+
     showMessage(
       "حدد مكان الوصول أولاً.",
       "error"
@@ -1329,6 +1581,7 @@ async function confirmDestination() {
   }
 
   try {
+
     const lat =
       destinationLocation.lat;
 
@@ -1342,6 +1595,7 @@ async function confirmDestination() {
       await fetch(url);
 
     if (response.ok) {
+
       const data =
         await response.json();
 
@@ -1351,17 +1605,33 @@ async function confirmDestination() {
     }
 
   } catch (error) {
+
     console.log(
       "Reverse geocoding failed",
       error
     );
   }
 
-  const savedDestination = {
-    ...destinationLocation
-  };
+  const savedDestination =
+    {
+      ...destinationLocation
+    };
 
-  renderNewTripPage(true);
+  if (tripMap) {
+
+    try {
+      tripMap.remove();
+    } catch (e) {
+      console.log(e);
+    }
+
+    tripMap = null;
+    pickupMarker = null;
+  }
+
+  renderNewTripPage(
+    true
+  );
 
   destinationLocation =
     savedDestination;
@@ -1372,8 +1642,10 @@ async function confirmDestination() {
     );
 
   if (destinationInput) {
+
     destinationInput.value =
-      destinationLocation.address || "";
+      destinationLocation.address ||
+      "";
   }
 }
 
@@ -1382,7 +1654,12 @@ async function confirmDestination() {
 ====================================================== */
 
 async function createTrip() {
-  if (!currentUser || !currentProfile) {
+
+  if (
+    !currentUser ||
+    !currentProfile
+  ) {
+
     showMessage(
       "يجب تسجيل الدخول أولاً.",
       "error"
@@ -1392,6 +1669,7 @@ async function createTrip() {
   }
 
   if (!pickupLocation) {
+
     showMessage(
       "حدد مكان الانطلاق أولاً.",
       "error"
@@ -1400,7 +1678,10 @@ async function createTrip() {
     return;
   }
 
-  if (!destinationLocation) {
+  if (
+    !destinationLocation
+  ) {
+
     showMessage(
       "حدد مكان الوصول أولاً.",
       "error"
@@ -1419,7 +1700,8 @@ async function createTrip() {
   const notes =
     document.getElementById(
       "tripNotes"
-    )?.value.trim() || "";
+    )?.value.trim() ||
+    "";
 
   const proposedPrice =
     Number(
@@ -1429,6 +1711,7 @@ async function createTrip() {
     );
 
   if (!passengerCount) {
+
     showMessage(
       "حدد عدد الركاب.",
       "error"
@@ -1441,6 +1724,7 @@ async function createTrip() {
     !proposedPrice ||
     proposedPrice <= 0
   ) {
+
     showMessage(
       "اكتب السعر المقترح.",
       "error"
@@ -1450,13 +1734,16 @@ async function createTrip() {
   }
 
   try {
+
     const button =
       document.getElementById(
         "submitTripBtn"
       );
 
     if (button) {
-      button.disabled = true;
+
+      button.disabled =
+        true;
 
       button.textContent =
         "جاري إرسال الرحلة...";
@@ -1468,12 +1755,15 @@ async function createTrip() {
         currentUser.uid,
 
       customerName:
-        currentProfile.name || "",
+        currentProfile.name ||
+        "",
 
       customerPhone:
-        currentProfile.phone || "",
+        currentProfile.phone ||
+        "",
 
       pickup: {
+
         lat:
           pickupLocation.lat,
 
@@ -1481,10 +1771,12 @@ async function createTrip() {
           pickupLocation.lng,
 
         address:
-          pickupLocation.address || ""
+          pickupLocation.address ||
+          ""
       },
 
       destination: {
+
         lat:
           destinationLocation.lat,
 
@@ -1492,7 +1784,8 @@ async function createTrip() {
           destinationLocation.lng,
 
         address:
-          destinationLocation.address || ""
+          destinationLocation.address ||
+          ""
       },
 
       passengerCount,
@@ -1527,7 +1820,8 @@ async function createTrip() {
 
         <div class="success-card">
 
-          <div class="success-icon">
+          <div
+            class="success-icon">
             ✓
           </div>
 
@@ -1542,7 +1836,8 @@ async function createTrip() {
           <p>
             السعر المقترح:
             <strong>
-              ${proposedPrice} جنيه
+              ${proposedPrice}
+              جنيه
             </strong>
           </p>
 
@@ -1560,11 +1855,13 @@ async function createTrip() {
     document.getElementById(
       "backHomeBtn"
     ).onclick =
-      () => renderCustomerHome(
-        currentProfile
-      );
+      () =>
+        renderCustomerHome(
+          currentProfile
+        );
 
   } catch (error) {
+
     console.error(error);
 
     const button =
@@ -1573,7 +1870,9 @@ async function createTrip() {
       );
 
     if (button) {
-      button.disabled = false;
+
+      button.disabled =
+        false;
 
       button.textContent =
         "🚕 اطلب الرحلة";
@@ -1592,7 +1891,7 @@ async function createTrip() {
 
 onAuthStateChanged(
   auth,
-  async user => {
+  async (user) => {
 
     if (!user) {
 
@@ -1617,8 +1916,12 @@ onAuthStateChanged(
           )
         );
 
-      if (!profileSnap.exists()) {
+      if (
+        !profileSnap.exists()
+      ) {
+
         renderHome();
+
         return;
       }
 
