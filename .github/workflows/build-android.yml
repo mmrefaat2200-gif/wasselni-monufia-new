@@ -47,6 +47,10 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Get SHA-1
+        working-directory: android
+        run: ./gradlew signingReport
+
       - name: Build APK
         working-directory: android
         run: ./gradlew assembleDebug
