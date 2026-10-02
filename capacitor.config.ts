@@ -6,5 +6,5 @@ const config: CapacitorConfig = {
   webDir: "dist",
   androidScheme: "https"
 };
-
+سكي مص
 export default config;
