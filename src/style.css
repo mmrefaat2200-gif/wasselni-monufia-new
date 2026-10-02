@@ -1,0 +1,37 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background: #f5f9ff;
+  color: #1d2939;
+  direction: rtl;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.app h1 {
+  color: #0878df;
+  font-size: 34px;
+  margin-bottom: 12px;
+}
+
+.app p {
+  color: #667085;
+  font-size: 18px;
+}
