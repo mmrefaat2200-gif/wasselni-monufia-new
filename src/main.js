@@ -25,10 +25,8 @@ import {
 
 import {
   getCurrentPosition,
-  requestPermissions,
-  checkPermissions
+  requestPermissions
 } from "@capacitor/geolocation";
-
 /* ======================================================
    FIREBASE
 ====================================================== */
