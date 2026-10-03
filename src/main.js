@@ -1651,7 +1651,7 @@ function renderNewTripPage(
    LOCATION
 ====================================================== */
 
-.coords.latitude;
+coords.latitude;
 
         const lng =
           position.coords.longitude;
