@@ -20,7 +20,11 @@ import {
   getDoc,
   addDoc,
   collection,
-  serverTimestamp
+  serverTimestamp,
+  query,
+  where,
+  onSnapshot,
+  orderBy
 } from "firebase/firestore";
 
 /* ======================================================
@@ -64,6 +68,12 @@ let destinationLocation = null;
 
 let tripMap = null;
 let pickupMarker = null;
+
+/* ======================================================
+   CAPTAIN TRIPS LISTENER
+====================================================== */
+
+let stopCaptainTripsListener = null;
 
 /* ======================================================
    HELPERS
@@ -121,12 +131,10 @@ function normalizeEgyptPhone(phone) {
 
   value = value.replace(/\s+/g, "");
 
-  // 010xxxxxxxx -> +2010xxxxxxxx
   if (value.startsWith("01")) {
     value = "+20" + value.substring(1);
   }
 
-  // 2010xxxxxxxx -> +2010xxxxxxxx
   if (
     value.startsWith("20") &&
     !value.startsWith("+20")
@@ -190,7 +198,7 @@ function firebaseErrorMessage(error) {
       "تمت محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.",
 
     "permission-denied":
-      "الحساب دخل بنجاح، لكن صلاحية قراءة بيانات الحساب من Firebase غير مسموحة.",
+      "صلاحية Firebase غير مسموحة.",
 
     "failed-precondition":
       "يوجد إعداد ناقص في Firebase.",
@@ -264,41 +272,26 @@ function renderHome() {
     </div>
   `;
 
-  const customerButton =
-    document.getElementById(
-      "customerLoginBtn"
-    );
+  document.getElementById(
+    "customerLoginBtn"
+  ).onclick = () => {
+    selectedRole = "customer";
+    renderAuth("customer", "login");
+  };
 
-  const captainButton =
-    document.getElementById(
-      "captainLoginBtn"
-    );
+  document.getElementById(
+    "captainLoginBtn"
+  ).onclick = () => {
+    selectedRole = "captain";
+    renderAuth("captain", "login");
+  };
 
-  const registerButton =
-    document.getElementById(
-      "registerBtn"
-    );
-
-  if (customerButton) {
-    customerButton.onclick = () => {
-      selectedRole = "customer";
-      renderAuth("customer", "login");
-    };
-  }
-
-  if (captainButton) {
-    captainButton.onclick = () => {
-      selectedRole = "captain";
-      renderAuth("captain", "login");
-    };
-  }
-
-  if (registerButton) {
-    registerButton.onclick = () => {
-      selectedRole = "customer";
-      renderAuth("customer", "register");
-    };
-  }
+  document.getElementById(
+    "registerBtn"
+  ).onclick = () => {
+    selectedRole = "customer";
+    renderAuth("customer", "register");
+  };
 }
 
 /* ======================================================
@@ -373,9 +366,7 @@ function renderAuth(
 
         <div class="input-group">
 
-          <label>
-            رقم الهاتف
-          </label>
+          <label>رقم الهاتف</label>
 
           <input
             id="phoneInput"
@@ -392,9 +383,7 @@ function renderAuth(
             ? `
               <div class="input-group">
 
-                <label>
-                  الاسم بالكامل
-                </label>
+                <label>الاسم بالكامل</label>
 
                 <input
                   id="nameInput"
@@ -414,9 +403,7 @@ function renderAuth(
             ? `
               <div class="input-group">
 
-                <label>
-                  نوع السيارة
-                </label>
+                <label>نوع السيارة</label>
 
                 <input
                   id="carTypeInput"
@@ -428,9 +415,7 @@ function renderAuth(
 
               <div class="input-group">
 
-                <label>
-                  موديل السيارة
-                </label>
+                <label>موديل السيارة</label>
 
                 <input
                   id="carModelInput"
@@ -442,9 +427,7 @@ function renderAuth(
 
               <div class="input-group">
 
-                <label>
-                  رقم السيارة
-                </label>
+                <label>رقم السيارة</label>
 
                 <input
                   id="carNumberInput"
@@ -459,9 +442,7 @@ function renderAuth(
 
         <div class="input-group">
 
-          <label>
-            كلمة المرور
-          </label>
+          <label>كلمة المرور</label>
 
           <input
             id="passwordInput"
@@ -516,19 +497,13 @@ function renderAuth(
   document.getElementById(
     "customerRoleBtn"
   ).onclick = () => {
-    renderAuth(
-      "customer",
-      mode
-    );
+    renderAuth("customer", mode);
   };
 
   document.getElementById(
     "captainRoleBtn"
   ).onclick = () => {
-    renderAuth(
-      "captain",
-      mode
-    );
+    renderAuth("captain", mode);
   };
 
   document.getElementById(
@@ -545,19 +520,13 @@ function renderAuth(
     document.getElementById(
       "loginInsteadBtn"
     ).onclick = () => {
-      renderAuth(
-        role,
-        "login"
-      );
+      renderAuth(role, "login");
     };
   } else {
     document.getElementById(
       "registerInsteadBtn"
     ).onclick = () => {
-      renderAuth(
-        role,
-        "register"
-      );
+      renderAuth(role, "register");
     };
   }
 }
@@ -593,7 +562,6 @@ async function registerAccount() {
       "اكتب رقم هاتف مصري صحيح مثل 01012345678.",
       "error"
     );
-
     return;
   }
 
@@ -602,7 +570,6 @@ async function registerAccount() {
       "كلمة المرور يجب أن تكون 6 أحرف على الأقل.",
       "error"
     );
-
     return;
   }
 
@@ -611,7 +578,6 @@ async function registerAccount() {
       "اكتب الاسم بالكامل.",
       "error"
     );
-
     return;
   }
 
@@ -622,9 +588,7 @@ async function registerAccount() {
     );
 
   try {
-    loading(
-      "جاري إنشاء الحساب..."
-    );
+    loading("جاري إنشاء الحساب...");
 
     const result =
       await createUserWithEmailAndPassword(
@@ -642,8 +606,7 @@ async function registerAccount() {
     };
 
     if (
-      selectedRole ===
-      "captain"
+      selectedRole === "captain"
     ) {
       profile.carType =
         document.getElementById(
@@ -677,16 +640,11 @@ async function registerAccount() {
       profile;
 
     if (
-      selectedRole ===
-      "captain"
+      selectedRole === "captain"
     ) {
-      renderCaptainHome(
-        profile
-      );
+      renderCaptainHome(profile);
     } else {
-      renderCustomerHome(
-        profile
-      );
+      renderCustomerHome(profile);
     }
 
     showMessage(
@@ -741,7 +699,6 @@ async function loginAccount() {
       "اكتب رقم هاتف مصري صحيح مثل 01012345678.",
       "error"
     );
-
     return;
   }
 
@@ -750,7 +707,6 @@ async function loginAccount() {
       "اكتب كلمة المرور.",
       "error"
     );
-
     return;
   }
 
@@ -760,26 +716,12 @@ async function loginAccount() {
       roleAtLogin
     );
 
-  console.log(
-    "LOGIN ROLE:",
-    roleAtLogin
-  );
-
-  console.log(
-    "LOGIN EMAIL:",
-    email
-  );
-
   try {
     loading(
       roleAtLogin === "captain"
         ? "جاري دخول الكابتن..."
         : "جاري دخول العميل..."
     );
-
-    /*
-      Firebase Authentication
-    */
 
     const result =
       await signInWithEmailAndPassword(
@@ -791,15 +733,6 @@ async function loginAccount() {
     currentUser =
       result.user;
 
-    console.log(
-      "Firebase login successful:",
-      result.user.uid
-    );
-
-    /*
-      Read profile
-    */
-
     const profileSnap =
       await getDoc(
         doc(
@@ -809,17 +742,7 @@ async function loginAccount() {
         )
       );
 
-    /*
-      لو الحساب موجود في Authentication
-      لكن ملف users غير موجود،
-      ننشئ ملف أساسي بدل ما نعتبر الدخول فشل.
-    */
-
     if (!profileSnap.exists()) {
-
-      console.warn(
-        "Profile not found. Creating basic profile."
-      );
 
       currentProfile = {
         uid: result.user.uid,
@@ -845,14 +768,9 @@ async function loginAccount() {
       );
 
     } else {
-
       currentProfile =
         profileSnap.data();
     }
-
-    /*
-      تأكيد نوع الحساب
-    */
 
     if (
       currentProfile.role &&
@@ -878,21 +796,13 @@ async function loginAccount() {
       return;
     }
 
-    /*
-      الدخول للمنصة المناسبة
-    */
-
     if (
-      roleAtLogin ===
-      "captain"
+      roleAtLogin === "captain"
     ) {
-
       renderCaptainHome(
         currentProfile
       );
-
     } else {
-
       renderCustomerHome(
         currentProfile
       );
@@ -912,12 +822,6 @@ async function loginAccount() {
       error
     );
 
-    /*
-      مهم:
-      نعرض شاشة الدخول أولاً
-      وبعدها الرسالة حتى لا تختفي.
-    */
-
     renderAuth(
       roleAtLogin,
       "login"
@@ -934,9 +838,10 @@ async function loginAccount() {
    CUSTOMER HOME
 ====================================================== */
 
-function renderCustomerHome(
-  profile
-) {
+function renderCustomerHome(profile) {
+
+  stopCaptainTripsListener?.();
+
   appRoot().innerHTML = `
     <div class="page-container">
 
@@ -945,10 +850,7 @@ function renderCustomerHome(
         <div class="dashboard-header">
 
           <h2>
-            أهلاً ${
-              profile.name ||
-              "بك"
-            } 👋
+            أهلاً ${profile.name || "بك"} 👋
           </h2>
 
           <p>
@@ -989,14 +891,13 @@ function renderCustomerHome(
   document.getElementById(
     "newTripBtn"
   ).onclick =
-    () =>
-      renderNewTripPage();
+    () => renderNewTripPage();
 
   document.getElementById(
     "myTripsBtn"
   ).onclick = () => {
     showMessage(
-      "قسم رحلاتي هنضيفه بعد شاشة الرحلة.",
+      "قسم رحلاتي هنضيفه بعد شاشة الرحلات المتاحة.",
       "info"
     );
   };
@@ -1014,6 +915,7 @@ function renderCustomerHome(
     "logoutBtn"
   ).onclick =
     async () => {
+
       try {
         await signOut(auth);
       } catch (error) {
@@ -1034,9 +936,10 @@ function renderCustomerHome(
    CAPTAIN HOME
 ====================================================== */
 
-function renderCaptainHome(
-  profile
-) {
+function renderCaptainHome(profile) {
+
+  stopCaptainTripsListener?.();
+
   appRoot().innerHTML = `
     <div class="page-container">
 
@@ -1045,10 +948,7 @@ function renderCaptainHome(
         <div class="dashboard-header">
 
           <h2>
-            أهلاً ${
-              profile.name ||
-              "كابتن"
-            } 🚕
+            أهلاً ${profile.name || "كابتن"} 🚕
           </h2>
 
           <p>
@@ -1072,33 +972,18 @@ function renderCaptainHome(
         <div class="profile-box">
 
           <p>
-            <strong>
-              نوع السيارة:
-            </strong>
-            ${
-              profile.carType ||
-              "-"
-            }
+            <strong>نوع السيارة:</strong>
+            ${profile.carType || "-"}
           </p>
 
           <p>
-            <strong>
-              الموديل:
-            </strong>
-            ${
-              profile.carModel ||
-              "-"
-            }
+            <strong>الموديل:</strong>
+            ${profile.carModel || "-"}
           </p>
 
           <p>
-            <strong>
-              رقم السيارة:
-            </strong>
-            ${
-              profile.carNumber ||
-              "-"
-            }
+            <strong>رقم السيارة:</strong>
+            ${profile.carNumber || "-"}
           </p>
 
         </div>
@@ -1116,18 +1001,14 @@ function renderCaptainHome(
 
   document.getElementById(
     "availableTripsBtn"
-  ).onclick = () => {
-    showMessage(
-      "قسم الرحلات المتاحة هنكمله في الخطوة التالية.",
-      "info"
-    );
-  };
+  ).onclick =
+    renderAvailableTrips;
 
   document.getElementById(
     "captainTripsBtn"
   ).onclick = () => {
     showMessage(
-      "قسم رحلات الكابتن هنكمله في الخطوة التالية.",
+      "قسم رحلات الكابتن هنضيفه بعد ربط قبول الرحلات.",
       "info"
     );
   };
@@ -1136,6 +1017,7 @@ function renderCaptainHome(
     "logoutBtn"
   ).onclick =
     async () => {
+
       try {
         await signOut(auth);
       } catch (error) {
@@ -1145,8 +1027,434 @@ function renderCaptainHome(
       currentUser = null;
       currentProfile = null;
 
+      stopCaptainTripsListener?.();
+
       renderHome();
     };
+}
+
+/* ======================================================
+   AVAILABLE TRIPS - CAPTAIN
+====================================================== */
+
+function renderAvailableTrips() {
+
+  if (!currentUser) {
+    showMessage(
+      "يجب تسجيل الدخول ككابتن أولاً.",
+      "error"
+    );
+    return;
+  }
+
+  stopCaptainTripsListener?.();
+
+  appRoot().innerHTML = `
+    <div class="page-container">
+
+      <button
+        id="backCaptainHomeBtn"
+        class="back-btn">
+        ← رجوع
+      </button>
+
+      <div class="dashboard">
+
+        <div class="dashboard-header">
+
+          <h2>
+            🚕 الرحلات المتاحة
+          </h2>
+
+          <p>
+            الرحلات الجديدة تظهر هنا تلقائيًا
+          </p>
+
+        </div>
+
+        <div
+          id="availableTripsList">
+
+          <div class="loading-screen">
+            <div class="loader"></div>
+            <p>جاري تحميل الرحلات...</p>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById(
+    "backCaptainHomeBtn"
+  ).onclick = () => {
+    renderCaptainHome(
+      currentProfile
+    );
+  };
+
+  listenForAvailableTrips();
+}
+
+/* ======================================================
+   LISTEN FOR OPEN TRIPS
+====================================================== */
+
+function listenForAvailableTrips() {
+
+  const list =
+    document.getElementById(
+      "availableTripsList"
+    );
+
+  if (!list) {
+    return;
+  }
+
+  try {
+
+    /*
+      بنجيب الرحلات اللي status بتاعها open
+      وبنرتبها بالأحدث.
+    */
+
+    const tripsQuery =
+      query(
+        collection(
+          db,
+          "trips"
+        ),
+        where(
+          "status",
+          "==",
+          "open"
+        ),
+        orderBy(
+          "createdAt",
+          "desc"
+        )
+      );
+
+    stopCaptainTripsListener =
+      onSnapshot(
+        tripsQuery,
+
+        (snapshot) => {
+
+          if (snapshot.empty) {
+
+            list.innerHTML = `
+              <div class="empty-state">
+
+                <div
+                  class="empty-icon">
+                  🚕
+                </div>
+
+                <h3>
+                  لا توجد رحلات متاحة الآن
+                </h3>
+
+                <p>
+                  عندما يطلب عميل رحلة ستظهر هنا تلقائيًا.
+                </p>
+
+              </div>
+            `;
+
+            return;
+          }
+
+          list.innerHTML = "";
+
+          snapshot.forEach(
+            (tripDoc) => {
+
+              const trip =
+                tripDoc.data();
+
+              const tripId =
+                tripDoc.id;
+
+              const card =
+                createCaptainTripCard(
+                  trip,
+                  tripId
+                );
+
+              list.appendChild(
+                card
+              );
+            }
+          );
+        },
+
+        (error) => {
+
+          console.error(
+            "CAPTAIN TRIPS ERROR:",
+            error
+          );
+
+          list.innerHTML = `
+            <div class="empty-state">
+
+              <h3>
+                حصل خطأ في تحميل الرحلات
+              </h3>
+
+              <p>
+                ${firebaseErrorMessage(error)}
+              </p>
+
+            </div>
+          `;
+        }
+      );
+
+  } catch (error) {
+
+    console.error(error);
+
+    list.innerHTML = `
+      <div class="empty-state">
+
+        <h3>
+          تعذر تحميل الرحلات
+        </h3>
+
+        <p>
+          ${firebaseErrorMessage(error)}
+        </p>
+
+      </div>
+    `;
+  }
+}
+
+/* ======================================================
+   CAPTAIN TRIP CARD
+====================================================== */
+
+function createCaptainTripCard(
+  trip,
+  tripId
+) {
+
+  const card =
+    document.createElement(
+      "div"
+    );
+
+  card.className =
+    "captain-trip-card trip-card";
+
+  const pickupAddress =
+    trip.pickup?.address ||
+    "موقع الانطلاق غير محدد";
+
+  const destinationAddress =
+    trip.destination?.address ||
+    "مكان الوصول غير محدد";
+
+  const passengerCount =
+    trip.passengerCount ||
+    1;
+
+  const notes =
+    trip.notes ||
+    "لا توجد ملاحظات";
+
+  const price =
+    trip.proposedPrice ||
+    0;
+
+  const customerName =
+    trip.customerName ||
+    "عميل";
+
+  const customerPhone =
+    trip.customerPhone ||
+    "";
+
+  card.innerHTML = `
+
+    <div class="trip-card-header">
+
+      <h3>
+        🚕 رحلة جديدة
+      </h3>
+
+      <span class="trip-status">
+        مفتوحة
+      </span>
+
+    </div>
+
+    <div class="trip-info">
+
+      <div class="trip-info-row">
+
+        <strong>
+          👤 العميل
+        </strong>
+
+        <span>
+          ${escapeHtml(customerName)}
+        </span>
+
+      </div>
+
+      <div class="trip-info-row">
+
+        <strong>
+          📍 الانطلاق
+        </strong>
+
+        <span>
+          ${escapeHtml(pickupAddress)}
+        </span>
+
+      </div>
+
+      <div class="trip-info-row">
+
+        <strong>
+          🏁 الوصول
+        </strong>
+
+        <span>
+          ${escapeHtml(destinationAddress)}
+        </span>
+
+      </div>
+
+      <div class="trip-info-row">
+
+        <strong>
+          👥 الركاب
+        </strong>
+
+        <span>
+          ${passengerCount}
+        </span>
+
+      </div>
+
+      <div class="trip-info-row">
+
+        <strong>
+          📝 الملاحظات
+        </strong>
+
+        <span>
+          ${escapeHtml(notes)}
+        </span>
+
+      </div>
+
+      <div class="trip-price">
+
+        💰 السعر المقترح:
+
+        <strong>
+          ${price} جنيه
+        </strong>
+
+      </div>
+
+    </div>
+
+    <div class="trip-actions">
+
+      ${
+        customerPhone
+          ? `
+            <a
+              class="primary-btn"
+              href="tel:${customerPhone}">
+              📞 اتصال بالعميل
+            </a>
+          `
+          : ""
+      }
+
+      <button
+        class="secondary-btn offerTripBtn">
+        💰 تقديم عرض سعر
+      </button>
+
+      <button
+        class="primary-btn acceptTripBtn">
+        ✅ قبول الرحلة
+      </button>
+
+    </div>
+
+  `;
+
+  const offerButton =
+    card.querySelector(
+      ".offerTripBtn"
+    );
+
+  const acceptButton =
+    card.querySelector(
+      ".acceptTripBtn"
+    );
+
+  offerButton.onclick = () => {
+
+    showMessage(
+      "هنضيف نظام عروض الأسعار في الخطوة التالية.",
+      "info"
+    );
+
+  };
+
+  acceptButton.onclick = () => {
+
+    showMessage(
+      "هنربط قبول الرحلة بالكابتن في الخطوة التالية.",
+      "info"
+    );
+
+  };
+
+  return card;
+}
+
+/* ======================================================
+   ESCAPE HTML
+====================================================== */
+
+function escapeHtml(value) {
+
+  return String(
+    value ?? ""
+  )
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+    .replace(
+      /'/g,
+      "&#039;"
+    );
 }
 
 /* ======================================================
@@ -1156,6 +1464,7 @@ function renderCaptainHome(
 function renderNewTripPage(
   preserveLocations = false
 ) {
+
   if (!preserveLocations) {
     pickupLocation = null;
     destinationLocation = null;
@@ -1314,6 +1623,7 @@ function renderNewTripPage(
     createTrip;
 
   if (pickupLocation) {
+
     const pickupInput =
       document.getElementById(
         "pickupAddress"
@@ -1326,6 +1636,7 @@ function renderNewTripPage(
   }
 
   if (destinationLocation) {
+
     const destinationInput =
       document.getElementById(
         "destinationAddress"
@@ -1344,15 +1655,16 @@ function renderNewTripPage(
 ====================================================== */
 
 async function getPickupLocation() {
+
   try {
+
     showMessage(
       "جاري تحديد موقعك...",
       "info"
     );
 
-    if (
-      !navigator.geolocation
-    ) {
+    if (!navigator.geolocation) {
+
       showMessage(
         "الموقع غير مدعوم على الجهاز.",
         "error"
@@ -1506,6 +1818,7 @@ function openDestinationMap() {
   ).onclick = () => {
 
     if (tripMap) {
+
       try {
         tripMap.remove();
       } catch (e) {
@@ -1531,8 +1844,7 @@ function openDestinationMap() {
     (event) => {
 
       if (
-        event.key ===
-        "Enter"
+        event.key === "Enter"
       ) {
         searchPlace();
       }
@@ -1657,6 +1969,7 @@ function updateMapCenter() {
     );
 
   if (selected) {
+
     selected.textContent =
       `📍 ${lat.toFixed(
         6
@@ -1714,9 +2027,7 @@ async function searchPlace() {
     const results =
       await response.json();
 
-    if (
-      !results.length
-    ) {
+    if (!results.length) {
 
       showMessage(
         "لم يتم العثور على المكان.",
@@ -1736,10 +2047,7 @@ async function searchPlace() {
       Number(first.lon);
 
     tripMap.setView(
-      [
-        lat,
-        lng
-      ],
+      [lat, lng],
       17,
       {
         animate: true
@@ -1759,6 +2067,7 @@ async function searchPlace() {
       );
 
     if (selected) {
+
       selected.textContent =
         `📍 ${first.display_name}`;
     }
@@ -1785,9 +2094,7 @@ async function searchPlace() {
 
 async function confirmDestination() {
 
-  if (
-    !destinationLocation
-  ) {
+  if (!destinationLocation) {
 
     showMessage(
       "حدد مكان الوصول أولاً.",
@@ -1892,9 +2199,7 @@ async function createTrip() {
     return;
   }
 
-  if (
-    !destinationLocation
-  ) {
+  if (!destinationLocation) {
 
     showMessage(
       "حدد مكان الوصول أولاً.",
@@ -1914,8 +2219,7 @@ async function createTrip() {
   const notes =
     document.getElementById(
       "tripNotes"
-    )?.value.trim() ||
-    "";
+    )?.value.trim() || "";
 
   const proposedPrice =
     Number(
@@ -1956,8 +2260,7 @@ async function createTrip() {
 
     if (button) {
 
-      button.disabled =
-        true;
+      button.disabled = true;
 
       button.textContent =
         "جاري إرسال الرحلة...";
@@ -2076,7 +2379,10 @@ async function createTrip() {
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      "CREATE TRIP ERROR:",
+      error
+    );
 
     const button =
       document.getElementById(
@@ -2085,15 +2391,14 @@ async function createTrip() {
 
     if (button) {
 
-      button.disabled =
-        false;
+      button.disabled = false;
 
       button.textContent =
         "🚕 اطلب الرحلة";
     }
 
     showMessage(
-      "لم يتم إرسال الرحلة. تأكد من اتصال الإنترنت وصلاحيات Firebase.",
+      firebaseErrorMessage(error),
       "error"
     );
   }
@@ -2114,6 +2419,8 @@ if (firebaseReady) {
         currentUser = null;
         currentProfile = null;
 
+        stopCaptainTripsListener?.();
+
         renderHome();
 
         return;
@@ -2133,14 +2440,7 @@ if (firebaseReady) {
             )
           );
 
-        if (
-          !profileSnap.exists()
-        ) {
-
-          /*
-            الحساب موجود في Authentication
-            لكن لا يوجد Profile.
-          */
+        if (!profileSnap.exists()) {
 
           renderHome();
 
