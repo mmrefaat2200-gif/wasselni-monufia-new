@@ -46,7 +46,7 @@ import { Geolocation } from "@capacitor/geolocation";
    ========================================================= */
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD1w6MD5QYYIOn0QLz5r8KqXo8z8WRjJKs",
+  apiKey: "AIzaSyD1w6D5QYYIOn0QLz5r8KqXo8z8WRjJKs",
   authDomain: "wasselni-monufia-ac5fc.firebaseapp.com",
   projectId: "wasselni-monufia-ac5fc",
   storageBucket: "wasselni-monufia-ac5fc.firebasestorage.app",
@@ -73,6 +73,7 @@ let user = null;
 let profile = null;
 
 let map = null;
+
 let pickupMarker = null;
 let destMarker = null;
 let routeLayer = null;
@@ -86,6 +87,14 @@ let pickup = null;
 let destination = null;
 
 let authBusy = false;
+
+/*
+  وضع الخريطة الحالي:
+
+  pickup      = تحديد الانطلاق
+  destination = تحديد الوصول
+*/
+let mapMode = "destination";
 
 
 /* =========================================================
@@ -139,8 +148,6 @@ function phone(value) {
 
 /* =========================================================
    INTERNAL FIREBASE EMAIL
-   مهم جداً:
-   العميل والكابتن لهم حسابين منفصلين حتى لو نفس الرقم
    ========================================================= */
 
 function loginEmail(phoneNumber, role) {
@@ -157,7 +164,6 @@ function loginEmail(phoneNumber, role) {
 
 /* =========================================================
    LEGACY ACCOUNT
-   لدعم بعض الحسابات القديمة إن وجدت
    ========================================================= */
 
 function legacyLoginEmail(phoneNumber) {
@@ -306,7 +312,6 @@ $("#app").innerHTML = `
       تسجيل الدخول برقم الموبايل وكلمة المرور
     </p>
 
-
     <label>
       نوع الحساب
     </label>
@@ -416,21 +421,6 @@ $("#app").innerHTML = `
       id="name"
       placeholder="الاسم"
     />
-
-
-    <label>
-      📷 صورة الحساب
-    </label>
-
-    <input
-      id="profilePhoto"
-      type="file"
-      accept="image/*"
-    />
-
-    <small class="muted">
-      اختياري — يفضل صورة واضحة للوجه.
-    </small>
 
 
     <label>
@@ -558,17 +548,24 @@ $("#app").innerHTML = `
     </label>
 
     <button
+      id="choosePickup"
+      class="btn outline"
+    >
+      🗺️ تحديد مكان الانطلاق على الخريطة
+    </button>
+
+    <button
       id="myLocation"
       class="btn outline"
     >
-      🎯 تحديد موقعي بدقة
+      🎯 استخدام موقعي الحالي
     </button>
 
     <div
       id="pickupText"
       class="status"
     >
-      لم يتم تحديد موقعك
+      لم يتم تحديد مكان الانطلاق
     </div>
 
   </div>
@@ -689,12 +686,12 @@ $("#app").innerHTML = `
 
       <div>
 
-        <h2>
+        <h2 id="mapTitle">
           🗺️ تحديد المكان
         </h2>
 
-        <small>
-          حرّك الخريطة حتى الدبوس فوق المكان المطلوب.
+        <small id="mapHint">
+          ابحث عن المكان أو حرّك الخريطة حتى الدبوس فوق المكان المطلوب.
         </small>
 
       </div>
@@ -712,7 +709,7 @@ $("#app").innerHTML = `
 
     <input
       id="search"
-      placeholder="🔎 ابحث عن شارع، قرية، منزل أو مكان"
+      placeholder="🔎 ابحث عن شارع، قرية، مدينة أو مكان"
     />
 
 
@@ -735,6 +732,7 @@ $("#app").innerHTML = `
     <button
       id="mapLocation"
       class="map-control"
+      title="استخدام موقعي الحالي"
     >
       🎯
     </button>
@@ -1001,8 +999,53 @@ function marker(type, point) {
 
 
 /* =========================================================
+   MAP MODE UI
+   ========================================================= */
+
+function updateMapModeUI() {
+
+  const isPickup =
+    mapMode === "pickup";
+
+  $("#mapTitle").textContent =
+    isPickup
+      ? "📍 تحديد مكان الانطلاق"
+      : "🏁 تحديد مكان الوصول";
+
+  $("#mapHint").textContent =
+    isPickup
+      ? "اكتب اسم البلد أو القرية أو المدينة أو الشارع، أو حرّك الخريطة حتى الدبوس فوق المكان."
+      : "اكتب اسم البلد أو القرية أو المدينة أو الشارع، أو حرّك الخريطة حتى الدبوس فوق المكان.";
+
+  $("#search").placeholder =
+    isPickup
+      ? "🔎 ابحث عن بلد، قرية، مدينة أو شارع الانطلاق"
+      : "🔎 ابحث عن بلد، قرية، مدينة أو شارع الوصول";
+
+  $("#confirmDest").textContent =
+    isPickup
+      ? "✅ تأكيد مكان الانطلاق"
+      : "✅ تأكيد مكان الوصول";
+
+  const currentPoint =
+    isPickup
+      ? pickup
+      : destination;
+
+  if (currentPoint) {
+
+    $("#coords").textContent =
+      `${currentPoint.lat.toFixed(6)}, ${currentPoint.lng.toFixed(6)}`;
+
+  }
+}
+
+
+/* =========================================================
    MAP CENTER
    ========================================================= */
+
+let centerRequestId = 0;
 
 async function centerChanged() {
 
@@ -1010,27 +1053,63 @@ async function centerChanged() {
 
   const center = map.getCenter();
 
-  destination = {
+  const point = {
     lat: center.lat,
     lng: center.lng
   };
 
-  if (destMarker) {
+  const requestId =
+    ++centerRequestId;
 
-    destMarker.setLatLng([
-      center.lat,
-      center.lng
-    ]);
 
-  } else {
+  /*
+    تحديد الانطلاق
+  */
 
-    destMarker =
-      marker("destination", destination);
+  if (mapMode === "pickup") {
+
+    pickup = point;
+
+    if (pickupMarker) {
+
+      pickupMarker.setLatLng([
+        point.lat,
+        point.lng
+      ]);
+
+    } else {
+
+      pickupMarker =
+        marker("pickup", pickup);
+    }
+
+  }
+
+  /*
+    تحديد الوصول
+  */
+
+  else {
+
+    destination = point;
+
+    if (destMarker) {
+
+      destMarker.setLatLng([
+        point.lat,
+        point.lng
+      ]);
+
+    } else {
+
+      destMarker =
+        marker("destination", destination);
+    }
   }
 
 
   $("#coords").textContent =
-    `${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}`;
+    `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`;
 
   $("#address").textContent =
     "جاري تحديد العنوان...";
@@ -1038,14 +1117,34 @@ async function centerChanged() {
 
   const address =
     await reverse(
-      center.lat,
-      center.lng
+      point.lat,
+      point.lng
     );
 
 
-  $("#address").innerHTML =
-    `🏁 <strong>${esc(address)}</strong>`;
+  /*
+    لو المستخدم حرّك الخريطة
+    مرة ثانية أثناء البحث،
+    لا نعرض نتيجة قديمة.
+  */
 
+  if (requestId !== centerRequestId) {
+    return;
+  }
+
+
+  $("#address").innerHTML =
+    mapMode === "pickup"
+
+      ? `📍 <strong>${esc(address)}</strong>`
+
+      : `🏁 <strong>${esc(address)}</strong>`;
+
+
+  /*
+    رسم الطريق فقط لو عندنا
+    انطلاق ووصول.
+  */
 
   drawRoute();
 }
@@ -1068,13 +1167,33 @@ function initMap() {
   }
 
 
+  let startPoint = null;
+
+  if (mapMode === "pickup") {
+
+    startPoint =
+      pickup
+        ? [pickup.lat, pickup.lng]
+        : [30.5526, 31.0106];
+
+  } else {
+
+    startPoint =
+      destination
+        ? [destination.lat, destination.lng]
+
+        : pickup
+          ? [pickup.lat, pickup.lng]
+
+          : [30.5526, 31.0106];
+  }
+
+
   map = L.map("map", {
     zoomControl: false
   }).setView(
-    pickup
-      ? [pickup.lat, pickup.lng]
-      : [30.5526, 31.0106],
-    pickup ? 18 : 13
+    startPoint,
+    pickup || destination ? 18 : 13
   );
 
 
@@ -1099,30 +1218,162 @@ function initMap() {
   );
 
 
+  /*
+    إظهار ماركر الانطلاق لو موجود
+  */
+
   if (pickup) {
+
     pickupMarker =
       marker("pickup", pickup);
   }
 
 
+  /*
+    إظهار ماركر الوصول لو موجود
+  */
+
   if (destination) {
 
     destMarker =
       marker("destination", destination);
-
-    map.setView(
-      [
-        destination.lat,
-        destination.lng
-      ],
-      19
-    );
   }
+
+
+  updateMapModeUI();
+
+
+  /*
+    تحديث العنوان للمكان الحالي
+  */
+
+  setTimeout(
+    () => centerChanged(),
+    300
+  );
 }
 
 
 /* =========================================================
-   SET PICKUP
+   OPEN MAP IN PICKUP MODE
+   ========================================================= */
+
+function openPickupMap() {
+
+  mapMode = "pickup";
+
+  updateMapModeUI();
+
+  screen("mapScreen");
+
+
+  setTimeout(() => {
+
+    initMap();
+
+    if (!map) return;
+
+    map.invalidateSize();
+
+
+    if (pickup) {
+
+      map.setView(
+        [
+          pickup.lat,
+          pickup.lng
+        ],
+        19
+      );
+
+    } else if (destination) {
+
+      /*
+        لو مفيش انطلاق لكن فيه وصول،
+        نبدأ قريب من الوصول مؤقتاً.
+      */
+
+      map.setView(
+        [
+          destination.lat,
+          destination.lng
+        ],
+        13
+      );
+
+    } else {
+
+      map.setView(
+        [30.5526, 31.0106],
+        13
+      );
+    }
+
+  }, 150);
+}
+
+
+/* =========================================================
+   OPEN MAP IN DESTINATION MODE
+   ========================================================= */
+
+function openDestinationMap() {
+
+  mapMode = "destination";
+
+  updateMapModeUI();
+
+  screen("mapScreen");
+
+
+  setTimeout(() => {
+
+    initMap();
+
+    if (!map) return;
+
+    map.invalidateSize();
+
+
+    if (destination) {
+
+      map.setView(
+        [
+          destination.lat,
+          destination.lng
+        ],
+        19
+      );
+
+    } else if (pickup) {
+
+      /*
+        الوصول يبدأ من مكان الانطلاق
+        عشان يكون أسهل للمستخدم.
+      */
+
+      map.setView(
+        [
+          pickup.lat,
+          pickup.lng
+        ],
+        13
+      );
+
+    } else {
+
+      map.setView(
+        [30.5526, 31.0106],
+        13
+      );
+    }
+
+  }, 150);
+}
+
+
+/* =========================================================
+   SET PICKUP BY GPS
    ========================================================= */
 
 async function setPickup() {
@@ -1193,6 +1444,10 @@ async function setPickup() {
 
     if (map) {
 
+      mapMode = "pickup";
+
+      updateMapModeUI();
+
       map.setView(
         [point.lat, point.lng],
         19
@@ -1201,16 +1456,25 @@ async function setPickup() {
 
 
     msg(
-      "تم تحديد موقعك بدقة 📍",
+      "تم تحديد مكان الانطلاق من موقعك الحالي 📍",
       "success"
     );
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      "GPS PICKUP ERROR:",
+      error
+    );
+
+    /*
+      مهم:
+      لو GPS مقفول لا نمنع المستخدم
+      من استخدام الخريطة يدوياً.
+    */
 
     msg(
-      "اسمح للتطبيق بالموقع وشغّل GPS ثم حاول مرة أخرى.",
+      "لم نتمكن من استخدام GPS. يمكنك تحديد الانطلاق يدوياً من الخريطة.",
       "error"
     );
   }
@@ -1308,6 +1572,7 @@ async function searchPlaces(queryText) {
 
     box.innerHTML =
       data.length
+
         ? data
             .map(
               (item) =>
@@ -1323,6 +1588,7 @@ async function searchPlaces(queryText) {
                 `
             )
             .join("")
+
         : "<div class='status'>لا توجد نتائج.</div>";
 
 
@@ -1332,32 +1598,112 @@ async function searchPlaces(queryText) {
 
         button.onclick = () => {
 
-          destination = {
-            lat: Number(button.dataset.lat),
-            lng: Number(button.dataset.lon)
+          const point = {
+            lat:
+              Number(button.dataset.lat),
+
+            lng:
+              Number(button.dataset.lon)
           };
 
 
-          map.setView(
-            [
-              destination.lat,
-              destination.lng
-            ],
-            19
-          );
+          /*
+            لو وضع الخريطة انطلاق
+          */
+
+          if (mapMode === "pickup") {
+
+            pickup = point;
+
+
+            if (pickupMarker) {
+
+              pickupMarker.setLatLng([
+                point.lat,
+                point.lng
+              ]);
+
+            } else if (map) {
+
+              pickupMarker =
+                marker(
+                  "pickup",
+                  pickup
+                );
+            }
+
+          }
+
+          /*
+            لو وضع الخريطة وصول
+          */
+
+          else {
+
+            destination = point;
+
+
+            if (destMarker) {
+
+              destMarker.setLatLng([
+                point.lat,
+                point.lng
+              ]);
+
+            } else if (map) {
+
+              destMarker =
+                marker(
+                  "destination",
+                  destination
+                );
+            }
+          }
+
+
+          if (map) {
+
+            map.setView(
+              [
+                point.lat,
+                point.lng
+              ],
+              19
+            );
+          }
 
 
           $("#search").value =
             button.dataset.name;
 
           box.innerHTML = "";
+
+
+          $("#coords").textContent =
+            `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`;
+
+
+          $("#address").innerHTML =
+            mapMode === "pickup"
+
+              ? `📍 <strong>${esc(button.dataset.name)}</strong>`
+
+              : `🏁 <strong>${esc(button.dataset.name)}</strong>`;
+
+
+          drawRoute();
         };
       });
 
-  } catch {
+  } catch (error) {
+
+    console.error(
+      "SEARCH ERROR:",
+      error
+    );
 
     box.innerHTML =
-      "<div class='status'>تعذر البحث.</div>";
+      "<div class='status'>تعذر البحث. حاول مرة أخرى.</div>";
   }
 }
 
@@ -1366,6 +1712,22 @@ async function searchPlaces(queryText) {
    MAP EVENTS
    ========================================================= */
 
+
+/*
+  فتح خريطة الانطلاق
+*/
+
+$("#choosePickup").onclick =
+  () => {
+
+    openPickupMap();
+  };
+
+
+/*
+  GPS للانطلاق فقط
+*/
+
 $("#myLocation").onclick =
   async () => {
 
@@ -1373,36 +1735,186 @@ $("#myLocation").onclick =
   };
 
 
-$("#mapLocation").onclick =
-  setPickup;
+/*
+  زر GPS داخل الخريطة
+*/
 
+$("#mapLocation").onclick =
+  async () => {
+
+    /*
+      زر الموقع داخل الخريطة
+      معناه دائماً تحديد الانطلاق
+      من GPS إذا كان وضع الخريطة pickup.
+    */
+
+    if (mapMode === "pickup") {
+
+      await setPickup();
+
+      return;
+    }
+
+
+    /*
+      في وضع الوصول، GPS اختياري أيضاً.
+      لو المستخدم ضغطه نستخدم موقع الجهاز
+      كنقطة وصول.
+    */
+
+    try {
+
+      const point =
+        await exactLocation();
+
+
+      destination = {
+        lat: point.lat,
+        lng: point.lng
+      };
+
+
+      if (destMarker) {
+
+        destMarker.setLatLng([
+          point.lat,
+          point.lng
+        ]);
+
+      } else if (map) {
+
+        destMarker =
+          marker(
+            "destination",
+            destination
+          );
+      }
+
+
+      const address =
+        await reverse(
+          point.lat,
+          point.lng
+        );
+
+
+      $("#address").innerHTML =
+        `🏁 <strong>${esc(address)}</strong>`;
+
+
+      $("#coords").textContent =
+        `${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}`;
+
+
+      if (map) {
+
+        map.setView(
+          [
+            point.lat,
+            point.lng
+          ],
+          19
+        );
+      }
+
+    } catch (error) {
+
+      console.error(
+        "MAP GPS ERROR:",
+        error
+      );
+
+      msg(
+        "تعذر استخدام GPS. يمكنك اختيار المكان يدوياً من الخريطة.",
+        "error"
+      );
+    }
+  };
+
+
+/*
+  فتح خريطة الوصول
+*/
 
 $("#chooseDest").onclick =
   () => {
 
-    screen("mapScreen");
-
-    setTimeout(() => {
-
-      initMap();
-
-      map.invalidateSize();
-
-    }, 150);
+    openDestinationMap();
   };
 
 
-$("#closeMap").onclick =
-  () => screen("home");
+/*
+  إغلاق الخريطة
+*/
 
+$("#closeMap").onclick =
+  () => {
+
+    $("#search").value = "";
+
+    $("#results").innerHTML = "";
+
+    screen("home");
+  };
+
+
+/*
+  تأكيد المكان
+*/
 
 $("#confirmDest").onclick =
   async () => {
 
+    if (mapMode === "pickup") {
+
+      if (!pickup) {
+
+        msg(
+          "حدد مكان الانطلاق أولاً.",
+          "error"
+        );
+
+        return;
+      }
+
+
+      const address =
+        await reverse(
+          pickup.lat,
+          pickup.lng
+        );
+
+
+      $("#pickupText").innerHTML =
+        `📍 <strong>${esc(address)}</strong>`;
+
+
+      $("#search").value = "";
+
+      $("#results").innerHTML = "";
+
+
+      screen("home");
+
+
+      msg(
+        "تم تحديد مكان الانطلاق بدقة ✅",
+        "success"
+      );
+
+
+      return;
+    }
+
+
+    /*
+      تأكيد الوصول
+    */
+
     if (!destination) {
 
       msg(
-        "حدد مكان الوصول أولاً",
+        "حدد مكان الوصول أولاً.",
         "error"
       );
 
@@ -1419,6 +1931,11 @@ $("#confirmDest").onclick =
 
     $("#destText").innerHTML =
       `🏁 <strong>${esc(address)}</strong>`;
+
+
+    $("#search").value = "";
+
+    $("#results").innerHTML = "";
 
 
     screen("home");
@@ -1897,8 +2414,6 @@ $("#finishReg").onclick =
     $("#regMsg").textContent = "";
 
 
-    /* ---------- VALIDATION ---------- */
-
     if (!name) {
 
       $("#regMsg").textContent =
@@ -1939,13 +2454,6 @@ $("#finishReg").onclick =
     }
 
 
-    /*
-      مهم:
-      بيانات الكابتن يتم فحصها قبل إنشاء
-      حساب Firebase حتى لا يظهر الحساب
-      كأنه موجود لو البيانات ناقصة.
-    */
-
     if (
       role === "captain" &&
       (
@@ -1973,16 +2481,6 @@ $("#finishReg").onclick =
       button.textContent =
         "جاري إنشاء الحساب...";
 
-
-      /*
-        الحساب أصبح منفصل حسب النوع:
-
-        customer:
-        2010xxxxxxxx.customer@login...
-
-        captain:
-        2010xxxxxxxx.captain@login...
-      */
 
       const internalEmail =
         loginEmail(
@@ -2074,13 +2572,6 @@ $("#finishReg").onclick =
 
       } catch (firestoreError) {
 
-        /*
-          لو Firebase Auth اتعمل بنجاح
-          لكن Firestore فشل، نحاول نحذف
-          حساب Auth حتى لا يفضل الحساب
-          موجود ويظهر email-already-in-use.
-        */
-
         console.error(
           "FIRESTORE PROFILE ERROR:",
           firestoreError
@@ -2106,48 +2597,10 @@ $("#finishReg").onclick =
       }
 
 
-      /* ---------- PROFILE PHOTO ---------- */
-
-      const photoFile =
-        $("#profilePhoto")
-          ?.files?.[0];
-
-
-      if (photoFile) {
-
-        try {
-
-          data.photoURL =
-            await uploadProfilePhoto(
-              newUser.uid,
-              photoFile
-            );
-
-
-          await updateDoc(
-            doc(
-              db,
-              "users",
-              newUser.uid
-            ),
-            {
-              photoURL:
-                data.photoURL
-            }
-          );
-
-        } catch (photoError) {
-
-          console.error(
-            photoError
-          );
-
-          msg(
-            "تم إنشاء الحساب، لكن تعذر رفع الصورة. يمكنك المحاولة لاحقاً.",
-            "error"
-          );
-        }
-      }
+      /*
+        مفيش رفع صورة أثناء إنشاء الحساب.
+        صورة الحساب ممكن تتضاف لاحقاً من صفحة حسابي.
+      */
 
 
       user = newUser;
@@ -2284,11 +2737,6 @@ $("#loginBtn").onclick =
       );
 
 
-      /*
-        تسجيل الدخول بالحساب الخاص
-        بالدور المختار.
-      */
-
       const credential =
         await signInWithEmailAndPassword(
           auth,
@@ -2300,10 +2748,6 @@ $("#loginBtn").onclick =
       const loggedUser =
         credential.user;
 
-
-      /*
-        قراءة ملف المستخدم من Firestore
-      */
 
       const profileDoc =
         await getDoc(
@@ -2329,11 +2773,6 @@ $("#loginBtn").onclick =
       const userProfile =
         profileDoc.data();
 
-
-      /*
-        تأكيد أن نوع الحساب هو نفس
-        النوع الذي اختاره المستخدم.
-      */
 
       if (
         userProfile.role !== role
@@ -2380,14 +2819,6 @@ $("#loginBtn").onclick =
         error
       );
 
-
-      /*
-        محاولة دعم الحسابات القديمة
-        التي كانت تستخدم:
-        2010xxxxxxxx@phone.wasselni.app
-
-        لا يتم استخدامها إلا كحل احتياطي.
-      */
 
       if (
         error.code === "auth/invalid-credential" ||
@@ -3813,12 +4244,6 @@ onAuthStateChanged(
   auth,
   async (firebaseUser) => {
 
-    /*
-      أثناء إنشاء الحساب لا نخلي
-      onAuthStateChanged يعمل redirect
-      قبل ما Firestore يخلص.
-    */
-
     if (authBusy) {
       return;
     }
@@ -3892,4 +4317,4 @@ onAuthStateChanged(
    INITIAL SCREEN
    ========================================================= */
 
-screen("login");ط
+screen("login");
