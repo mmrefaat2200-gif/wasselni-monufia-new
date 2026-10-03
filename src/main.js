@@ -1344,7 +1344,210 @@ function renderNewTripPage(
   ).onclick =
     createTrip;
 
+function renderNewTripPage(
+  preserveLocations = false
+) {
+  if (!preserveLocations) {
+    pickupLocation = null;
+    destinationLocation = null;
+    selectedRoute = null;
+  }
+
+  appRoot().innerHTML = `
+    <div class="page-container">
+
+      <button
+        id="backBtn"
+        class="back-btn">
+        ← رجوع
+      </button>
+
+      <div class="trip-card">
+
+        <h2>
+          🚕 رحلة جديدة
+        </h2>
+
+        <div class="input-group">
+
+          <label>
+            مكان الانطلاق
+          </label>
+
+          <div class="location-row">
+
+            <input
+              id="pickupAddress"
+              type="text"
+              placeholder="اضغط على زر موقعي"
+              readonly
+            />
+
+            <button
+              id="locationBtn"
+              class="location-btn">
+              📍 موقعي
+            </button>
+
+          </div>
+
+        </div>
+
+        <!-- خريطة موقع العميل -->
+        <div
+          id="pickupMap"
+          style="
+            width:100%;
+            height:280px;
+            margin-top:12px;
+            margin-bottom:18px;
+            border-radius:16px;
+            overflow:hidden;
+            display:none;
+            border:1px solid #dbeafe;
+          ">
+        </div>
+
+        <div
+          id="pickupLocationDetails"
+          style="
+            display:none;
+            margin-bottom:15px;
+            padding:12px;
+            border-radius:12px;
+            background:#eef7ff;
+            line-height:1.8;
+            text-align:right;
+          ">
+        </div>
+
+        <div class="input-group">
+
+          <label>
+            مكان الوصول
+          </label>
+
+          <button
+            id="chooseDestinationBtn"
+            class="map-select-btn">
+            🗺️ اختر مكان الوصول من الخريطة
+          </button>
+
+          <input
+            id="destinationAddress"
+            type="text"
+            placeholder="لم يتم اختيار الوجهة"
+            readonly
+          />
+
+        </div>
+
+        <div
+          id="routeInfo"
+          style="
+            display:none;
+            margin:12px 0;
+            padding:14px;
+            border-radius:12px;
+            background:#eef7ff;
+            text-align:center;
+          ">
+        </div>
+
+        <div class="input-group">
+
+          <label>
+            عدد الركاب
+          </label>
+
+          <select id="passengerCount">
+
+            ${Array.from(
+              { length: 8 },
+              (_, i) => `
+                <option value="${i + 1}">
+                  ${i + 1}
+                  ${
+                    i === 0
+                      ? "راكب"
+                      : "ركاب"
+                  }
+                </option>
+              `
+            ).join("")}
+
+          </select>
+
+        </div>
+
+        <div class="input-group">
+
+          <label>
+            ملاحظات
+          </label>
+
+          <textarea
+            id="tripNotes"
+            rows="3"
+            placeholder="مثلاً: شنطة كبيرة أو محتاج عربية واسعة"></textarea>
+
+        </div>
+
+        <div class="input-group">
+
+          <label>
+            السعر المقترح
+          </label>
+
+          <input
+            id="proposedPrice"
+            type="number"
+            min="1"
+            inputmode="numeric"
+            placeholder="اكتب السعر بالجنيه"
+          />
+
+        </div>
+
+        <button
+          id="submitTripBtn"
+          class="primary-btn big-btn">
+          🚕 اطلب الرحلة
+        </button>
+
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById(
+    "backBtn"
+  ).onclick =
+    () =>
+      renderCustomerHome(
+        currentProfile
+      );
+
+  document.getElementById(
+    "locationBtn"
+  ).onclick =
+    getPickupLocation;
+
+  document.getElementById(
+    "chooseDestinationBtn"
+  ).onclick =
+    openDestinationMap;
+
+  document.getElementById(
+    "submitTripBtn"
+  ).onclick =
+    createTrip;
+
+  /*
+     لو عندنا موقع محفوظ، نعرضه مباشرة
+  */
   if (pickupLocation) {
+
     const input =
       document.getElementById(
         "pickupAddress"
@@ -1355,9 +1558,13 @@ function renderNewTripPage(
         pickupLocation.address ||
         "📍 تم تحديد موقعي الحالي";
     }
+
+    showPickupLocationOnMap();
+
   }
 
   if (destinationLocation) {
+
     const input =
       document.getElementById(
         "destinationAddress"
@@ -1368,6 +1575,7 @@ function renderNewTripPage(
         destinationLocation.address ||
         "";
     }
+
   }
 
   if (
