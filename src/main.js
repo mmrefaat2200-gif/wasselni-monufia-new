@@ -1588,7 +1588,279 @@ function renderNewTripPage(
     );
   }
 }
+/* ======================================================
+   PICKUP MAP
+====================================================== */
 
+function showPickupLocationOnMap() {
+
+  if (!pickupLocation) {
+    return;
+  }
+
+  const mapElement =
+    document.getElementById(
+      "pickupMap"
+    );
+
+  if (!mapElement) {
+    return;
+  }
+
+  mapElement.style.display =
+    "block";
+
+  /*
+     لو فيه خريطة قديمة، نشيلها
+  */
+  const oldMap =
+    mapElement._leaflet_map;
+
+  if (oldMap) {
+    try {
+      oldMap.remove();
+    } catch (error) {
+      console.log(
+        "OLD PICKUP MAP ERROR:",
+        error
+      );
+    }
+
+    mapElement._leaflet_map =
+      null;
+  }
+
+  const lat =
+    Number(
+      pickupLocation.lat
+    );
+
+  const lng =
+    Number(
+      pickupLocation.lng
+    );
+
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng)
+  ) {
+    return;
+  }
+
+  const map =
+    L.map(
+      mapElement,
+      {
+        zoomControl: true,
+        attributionControl: true
+      }
+    ).setView(
+      [lat, lng],
+      18
+    );
+
+  mapElement._leaflet_map =
+    map;
+
+  L.tileLayer(
+    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    {
+      maxZoom: 19,
+      attribution:
+        '&copy; OpenStreetMap contributors'
+    }
+  ).addTo(
+    map
+  );
+
+  /*
+     دائرة حول المكان
+  */
+  L.circle(
+    [lat, lng],
+    {
+      radius: 25
+    }
+  ).addTo(
+    map
+  );
+
+  /*
+     علامة الموقع
+  */
+  const marker =
+    L.marker(
+      [lat, lng]
+    )
+      .addTo(map)
+      .bindPopup(
+        "📍 موقعك الحالي"
+      )
+      .openPopup();
+
+  /*
+     السماح بتحريك العلامة لو احتاج المستخدم
+  */
+  marker.on(
+    "dragend",
+    async () => {
+
+      const position =
+        marker.getLatLng();
+
+      const newLat =
+        Number(
+          position.lat
+        );
+
+      const newLng =
+        Number(
+          position.lng
+        );
+
+      pickupLocation = {
+        lat: newLat,
+        lng: newLng,
+        address:
+          `موقع العميل (${newLat.toFixed(
+            6
+          )}, ${newLng.toFixed(
+            6
+          )})`
+      };
+
+      const input =
+        document.getElementById(
+          "pickupAddress"
+        );
+
+      if (input) {
+        input.value =
+          "📍 جاري تحديد العنوان...";
+      }
+
+      await reverseGeocodePickup(
+        newLat,
+        newLng
+      );
+
+      if (input) {
+        input.value =
+          pickupLocation.address;
+      }
+
+      if (destinationLocation) {
+        await calculateRoadRoute(
+          pickupLocation,
+          destinationLocation
+        );
+      }
+
+    }
+  );
+
+  /*
+     الضغط على الخريطة يغير مكان الانطلاق
+  */
+  map.on(
+    "click",
+    async (event) => {
+
+      const newLat =
+        Number(
+          event.latlng.lat
+        );
+
+      const newLng =
+        Number(
+          event.latlng.lng
+        );
+
+      marker.setLatLng([
+        newLat,
+        newLng
+      ]);
+
+      pickupLocation = {
+        lat: newLat,
+        lng: newLng,
+        address:
+          `موقع العميل (${newLat.toFixed(
+            6
+          )}, ${newLng.toFixed(
+            6
+          )})`
+      };
+
+      const input =
+        document.getElementById(
+          "pickupAddress"
+        );
+
+      if (input) {
+        input.value =
+          "📍 جاري تحديد العنوان...";
+      }
+
+      await reverseGeocodePickup(
+        newLat,
+        newLng
+      );
+
+      if (input) {
+        input.value =
+          pickupLocation.address;
+      }
+
+      if (destinationLocation) {
+        await calculateRoadRoute(
+          pickupLocation,
+          destinationLocation
+        );
+      }
+
+    }
+  );
+
+  /*
+     تحديث حجم الخريطة بعد ظهورها
+  */
+  setTimeout(() => {
+    try {
+      map.invalidateSize();
+    } catch (error) {
+      console.log(
+        "PICKUP MAP RESIZE ERROR:",
+        error
+      );
+    }
+  }, 200);
+
+  /*
+     عرض التفاصيل
+  */
+  const details =
+    document.getElementById(
+      "pickupLocationDetails"
+    );
+
+  if (details) {
+
+    details.style.display =
+      "block";
+
+    details.innerHTML = `
+      📍 <strong>موقع الانطلاق المحدد</strong>
+      <br>
+      خط العرض:
+      ${lat.toFixed(6)}
+      <br>
+      خط الطول:
+      ${lng.toFixed(6)}
+    `;
+
+  }
+}
 /* ======================================================
    GET CURRENT LOCATION
 ====================================================== */
