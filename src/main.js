@@ -1,5 +1,8 @@
 import "./style.css";
 
+import { Capacitor } from "@capacitor/core";
+import { Geolocation } from "@capacitor/geolocation";
+
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -1115,11 +1118,6 @@ function listenForAvailableTrips() {
 
   try {
 
-    /*
-      بنجيب الرحلات اللي status بتاعها open
-      وبنرتبها بالأحدث.
-    */
-
     const tripsQuery =
       query(
         collection(
@@ -1651,7 +1649,7 @@ function renderNewTripPage(
 }
 
 /* ======================================================
-   CURRENT LOCATION
+   CURRENT LOCATION - ANDROID PERMISSION
 ====================================================== */
 
 async function getPickupLocation() {
@@ -1659,14 +1657,166 @@ async function getPickupLocation() {
   try {
 
     showMessage(
-      "جاري تحديد موقعك...",
+      "جاري طلب إذن الموقع...",
       "info"
     );
+
+    /* ==================================================
+       ANDROID / CAPACITOR
+    ================================================== */
+
+    if (Capacitor.isNativePlatform()) {
+
+      try {
+
+        let permissions =
+          await Geolocation.checkPermissions();
+
+        console.log(
+          "Location permissions:",
+          permissions
+        );
+
+        if (
+          permissions.location !== "granted"
+        ) {
+
+          showMessage(
+            "اسمح للتطبيق باستخدام موقعك الحالي...",
+            "info"
+          );
+
+          permissions =
+            await Geolocation.requestPermissions();
+
+          console.log(
+            "Location permissions after request:",
+            permissions
+          );
+        }
+
+        if (
+          permissions.location !== "granted"
+        ) {
+
+          showMessage(
+            "لم يتم السماح للتطبيق باستخدام موقعك. اسمح بإذن الموقع ثم حاول مرة أخرى.",
+            "error"
+          );
+
+          return;
+        }
+
+        showMessage(
+          "تم السماح بالموقع. جاري تحديد مكانك...",
+          "info"
+        );
+
+        const position =
+          await Geolocation.getCurrentPosition({
+            enableHighAccuracy: true,
+            timeout: 20000,
+            maximumAge: 5000
+          });
+
+        const lat =
+          position.coords.latitude;
+
+        const lng =
+          position.coords.longitude;
+
+        console.log(
+          "Current location:",
+          lat,
+          lng
+        );
+
+        pickupLocation = {
+          lat,
+          lng,
+          address:
+            `موقع العميل (${lat.toFixed(
+              6
+            )}, ${lng.toFixed(
+              6
+            )})`
+        };
+
+        const input =
+          document.getElementById(
+            "pickupAddress"
+          );
+
+        if (input) {
+
+          input.value =
+            "📍 تم تحديد موقعي الحالي";
+        }
+
+        showMessage(
+          "تم تحديد موقع الانطلاق بنجاح ✅",
+          "success"
+        );
+
+        return;
+
+      } catch (nativeError) {
+
+        console.error(
+          "NATIVE LOCATION ERROR:",
+          nativeError
+        );
+
+        const errorCode =
+          nativeError?.code ||
+          nativeError?.message ||
+          "";
+
+        const errorText =
+          String(errorCode).toLowerCase();
+
+        if (
+          errorText.includes("permission") ||
+          errorText.includes("denied")
+        ) {
+
+          showMessage(
+            "لم يتم السماح للتطبيق باستخدام الموقع. اسمح بإذن الموقع من أذونات التطبيق ثم حاول مرة أخرى.",
+            "error"
+          );
+
+          return;
+        }
+
+        if (
+          errorText.includes("timeout")
+        ) {
+
+          showMessage(
+            "انتهى وقت تحديد الموقع. شغّل GPS وحاول مرة أخرى.",
+            "error"
+          );
+
+          return;
+        }
+
+        showMessage(
+          "تعذر تحديد موقعك. تأكد من تشغيل GPS وحاول مرة أخرى.",
+          "error"
+        );
+
+        return;
+      }
+    }
+
+    /* ==================================================
+       BROWSER / WEB FALLBACK
+    ================================================== */
 
     if (!navigator.geolocation) {
 
       showMessage(
-        "الموقع غير مدعوم على الجهاز.",
+        "الموقع غير مدعوم على هذا الجهاز.",
         "error"
       );
 
@@ -1675,7 +1825,7 @@ async function getPickupLocation() {
 
     navigator.geolocation.getCurrentPosition(
 
-      async (position) => {
+      (position) => {
 
         const lat =
           position.coords.latitude;
@@ -1700,12 +1850,13 @@ async function getPickupLocation() {
           );
 
         if (input) {
+
           input.value =
             "📍 تم تحديد موقعي الحالي";
         }
 
         showMessage(
-          "تم تحديد موقع الانطلاق بنجاح.",
+          "تم تحديد موقع الانطلاق بنجاح ✅",
           "success"
         );
       },
@@ -1713,7 +1864,7 @@ async function getPickupLocation() {
       (error) => {
 
         console.error(
-          "Geolocation error:",
+          "WEB GEOLOCATION ERROR:",
           error
         );
 
@@ -1723,16 +1874,21 @@ async function getPickupLocation() {
         if (
           error.code === 1
         ) {
+
           message =
-            "اسمح للتطبيق باستخدام الموقع من إعدادات الهاتف.";
+            "اسمح للمتصفح باستخدام الموقع ثم حاول مرة أخرى.";
+
         } else if (
           error.code === 2
         ) {
+
           message =
             "تعذر تحديد موقعك. شغّل GPS وحاول مرة أخرى.";
+
         } else if (
           error.code === 3
         ) {
+
           message =
             "انتهى وقت تحديد الموقع. تأكد من تشغيل GPS وحاول مرة أخرى.";
         }
@@ -1752,10 +1908,13 @@ async function getPickupLocation() {
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      "GET LOCATION ERROR:",
+      error
+    );
 
     showMessage(
-      "حدث خطأ أثناء تحديد موقعك.",
+      "حدث خطأ أثناء تحديد موقعك. حاول مرة أخرى.",
       "error"
     );
   }
@@ -1990,10 +2149,10 @@ async function searchPlace() {
       "placeSearch"
     );
 
-  const query =
+  const searchQuery =
     input?.value.trim();
 
-  if (!query) {
+  if (!searchQuery) {
 
     showMessage(
       "اكتب اسم المكان أولاً.",
@@ -2012,7 +2171,7 @@ async function searchPlace() {
 
     const url =
       `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=ar&q=${encodeURIComponent(
-        query
+        searchQuery
       )}`;
 
     const response =
