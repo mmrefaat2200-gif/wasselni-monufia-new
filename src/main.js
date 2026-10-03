@@ -4418,17 +4418,7 @@ const originalScreen =
   screen;
 
 
-screen = function(id) {
 
-  originalScreen(id);
-
-  if (id === "mapScreen") {
-
-    refreshMapSize();
-
-  }
-
-};
 
 
 /* ======================================================
