@@ -2371,13 +2371,6 @@ async function uploadProfilePhoto(
     }
   );
 
-
-  return await getDownloadURL(
-    storageRef
-  );
-}
-
-
 /* =========================================================
    REGISTER
    ========================================================= */
@@ -2385,34 +2378,29 @@ async function uploadProfilePhoto(
 $("#finishReg").onclick =
   async () => {
 
-    const button =
-      $("#finishReg");
-
+    const button = $("#finishReg");
 
     const name =
       $("#name").value.trim();
 
-
     const phoneNumber =
-      phone(
-        $("#regPhone").value
-      );
-
+      phone($("#regPhone").value);
 
     const password =
       $("#regPass").value;
 
-
     const password2 =
       $("#regPass2").value;
-
 
     const role =
       $("#role").value;
 
-
     $("#regMsg").textContent = "";
 
+
+    /* =========================
+       VALIDATION
+       ========================= */
 
     if (!name) {
 
@@ -2423,11 +2411,7 @@ $("#finishReg").onclick =
     }
 
 
-    if (
-      !/^\+20\d{10}$/.test(
-        phoneNumber
-      )
-    ) {
+    if (!/^\+20\d{10}$/.test(phoneNumber)) {
 
       $("#regMsg").textContent =
         "اكتب رقم موبايل مصري صحيح مثل 010xxxxxxxx.";
@@ -2453,6 +2437,10 @@ $("#finishReg").onclick =
       return;
     }
 
+
+    /* =========================
+       CAPTAIN VALIDATION
+       ========================= */
 
     if (
       role === "captain" &&
@@ -2482,6 +2470,11 @@ $("#finishReg").onclick =
         "جاري إنشاء الحساب...";
 
 
+      /*
+        رقم الموبايل يتحول داخلياً إلى إيميل
+        والمستخدم لا يرى هذا الإيميل.
+      */
+
       const internalEmail =
         loginEmail(
           phoneNumber,
@@ -2490,10 +2483,14 @@ $("#finishReg").onclick =
 
 
       console.log(
-        "REGISTER INTERNAL EMAIL:",
+        "REGISTER EMAIL:",
         internalEmail
       );
 
+
+      /* =========================
+         FIREBASE AUTH
+         ========================= */
 
       const credential =
         await createUserWithEmailAndPassword(
@@ -2507,17 +2504,26 @@ $("#finishReg").onclick =
         credential.user;
 
 
+      /* =========================
+         PROFILE DATA
+         ========================= */
+
       const data = {
 
-        uid: newUser.uid,
+        uid:
+          newUser.uid,
 
-        name,
+        name:
+          name,
 
-        phone: phoneNumber,
+        phone:
+          phoneNumber,
 
-        role,
+        role:
+          role,
 
-        photoURL: "",
+        photoURL:
+          "",
 
         accountNumber:
           accountNo(),
@@ -2525,11 +2531,17 @@ $("#finishReg").onclick =
         createdAt:
           serverTimestamp(),
 
-        rating: 0,
+        rating:
+          0,
 
-        ratingCount: 0
+        ratingCount:
+          0
       };
 
+
+      /* =========================
+         CAPTAIN DATA
+         ========================= */
 
       if (role === "captain") {
 
@@ -2556,6 +2568,10 @@ $("#finishReg").onclick =
       }
 
 
+      /* =========================
+         FIRESTORE PROFILE
+         ========================= */
+
       try {
 
         await setDoc(
@@ -2564,10 +2580,7 @@ $("#finishReg").onclick =
             "users",
             newUser.uid
           ),
-          data,
-          {
-            merge: true
-          }
+          data
         );
 
       } catch (firestoreError) {
@@ -2578,6 +2591,12 @@ $("#finishReg").onclick =
         );
 
 
+        /*
+          لو إنشاء Auth نجح لكن Firestore فشل،
+          نحاول حذف الحساب حتى لا يصبح الحساب
+          موجوداً بدون بيانات.
+        */
+
         try {
 
           await deleteUser(
@@ -2587,7 +2606,7 @@ $("#finishReg").onclick =
         } catch (deleteError) {
 
           console.error(
-            "DELETE ORPHAN USER ERROR:",
+            "DELETE ORPHAN ACCOUNT ERROR:",
             deleteError
           );
         }
@@ -2597,15 +2616,18 @@ $("#finishReg").onclick =
       }
 
 
-      /*
-        مفيش رفع صورة أثناء إنشاء الحساب.
-        صورة الحساب ممكن تتضاف لاحقاً من صفحة حسابي.
-      */
+      /* =========================
+         LOCAL STATE
+         ========================= */
 
+      user =
+        newUser;
 
-      user = newUser;
-
-      profile = data;
+      profile =
+        {
+          ...data,
+          uid: newUser.uid
+        };
 
 
       $("#regMsg").textContent =
@@ -2618,6 +2640,10 @@ $("#finishReg").onclick =
       );
 
 
+      /* =========================
+         OPEN CORRECT SCREEN
+         ========================= */
+
       if (role === "captain") {
 
         screen("captain");
@@ -2627,6 +2653,8 @@ $("#finishReg").onclick =
       } else {
 
         screen("home");
+
+        loadCustomerRides();
       }
 
 
@@ -2638,36 +2666,77 @@ $("#finishReg").onclick =
       );
 
 
+      /* =========================
+         FIREBASE ERRORS
+         ========================= */
+
       if (
         error.code ===
         "auth/email-already-in-use"
       ) {
 
         $("#regMsg").textContent =
-          "الرقم ده مسجل بالفعل بهذا النوع من الحساب. استخدم تسجيل الدخول.";
+          "الحساب ده موجود بالفعل. ادخل من شاشة تسجيل الدخول.";
 
-      } else if (
+      }
+
+      else if (
         error.code ===
         "auth/invalid-email"
       ) {
 
         $("#regMsg").textContent =
-          "بيانات رقم الموبايل غير صحيحة.";
+          "رقم الموبايل غير صحيح.";
 
-      } else if (
+      }
+
+      else if (
         error.code ===
         "auth/weak-password"
       ) {
 
         $("#regMsg").textContent =
-          "كلمة المرور ضعيفة. استخدم 6 أحرف أو أرقام على الأقل.";
+          "كلمة المرور ضعيفة. لازم تكون 6 أحرف أو أرقام على الأقل.";
 
-      } else {
+      }
+
+      else if (
+        error.code ===
+        "auth/api-key-not-valid"
+      ) {
+
+        $("#regMsg").textContent =
+          "Firebase رفض مفتاح التطبيق. بيانات Firebase في المشروع تحتاج مراجعة.";
+
+      }
+
+      else if (
+        error.code ===
+        "auth/network-request-failed"
+      ) {
+
+        $("#regMsg").textContent =
+          "تعذر الاتصال بـ Firebase. تأكد من الإنترنت وحاول مرة أخرى.";
+
+      }
+
+      else if (
+        error.code ===
+        "permission-denied"
+      ) {
+
+        $("#regMsg").textContent =
+          "تم إنشاء الحساب لكن Firebase رفض حفظ بيانات الحساب.";
+
+      }
+
+      else {
 
         $("#regMsg").textContent =
           error.message ||
           "تعذر إنشاء الحساب.";
       }
+
 
     } finally {
 
@@ -2688,15 +2757,16 @@ $("#finishReg").onclick =
 $("#loginBtn").onclick =
   async () => {
 
+    const button =
+      $("#loginBtn");
+
     const phoneNumber =
       phone(
         $("#loginPhone").value
       );
 
-
     const password =
       $("#loginPass").value;
-
 
     const role =
       $("#loginRole").value;
@@ -2705,15 +2775,27 @@ $("#loginBtn").onclick =
     $("#loginMsg").textContent = "";
 
 
+    /* =========================
+       VALIDATION
+       ========================= */
+
     if (
       !/^\+20\d{10}$/.test(
         phoneNumber
-      ) ||
-      !password
+      )
     ) {
 
       $("#loginMsg").textContent =
-        "اكتب رقم موبايل مصري صحيح وكلمة المرور.";
+        "اكتب رقم موبايل مصري صحيح مثل 010xxxxxxxx.";
+
+      return;
+    }
+
+
+    if (!password) {
+
+      $("#loginMsg").textContent =
+        "اكتب كلمة المرور.";
 
       return;
     }
@@ -2723,6 +2805,16 @@ $("#loginBtn").onclick =
 
       authBusy = true;
 
+      button.disabled = true;
+
+      button.textContent =
+        "جاري الدخول...";
+
+
+      /*
+        نفس الإيميل الداخلي الذي تم استخدامه
+        وقت إنشاء الحساب.
+      */
 
       const internalEmail =
         loginEmail(
@@ -2732,30 +2824,110 @@ $("#loginBtn").onclick =
 
 
       console.log(
-        "LOGIN INTERNAL EMAIL:",
+        "LOGIN EMAIL:",
         internalEmail
       );
 
 
-      const credential =
-        await signInWithEmailAndPassword(
-          auth,
-          internalEmail,
-          password
-        );
+      /* =========================
+         FIREBASE LOGIN
+         ========================= */
+
+      let credential;
+
+
+      try {
+
+        credential =
+          await signInWithEmailAndPassword(
+            auth,
+            internalEmail,
+            password
+          );
+
+      } catch (loginError) {
+
+        /*
+          دعم الحسابات القديمة التي كانت
+          تستخدم نظام الإيميل القديم.
+        */
+
+        if (
+          (
+            loginError.code ===
+              "auth/invalid-credential" ||
+
+            loginError.code ===
+              "auth/user-not-found" ||
+
+            loginError.code ===
+              "auth/wrong-password"
+          ) &&
+          role === "customer"
+        ) {
+
+          const legacyEmail =
+            legacyLoginEmail(
+              phoneNumber
+            );
+
+
+          if (
+            legacyEmail &&
+            legacyEmail !==
+              internalEmail
+          ) {
+
+            try {
+
+              credential =
+                await signInWithEmailAndPassword(
+                  auth,
+                  legacyEmail,
+                  password
+                );
+
+            } catch (legacyError) {
+
+              console.error(
+                "LEGACY LOGIN ERROR:",
+                legacyError
+              );
+
+              throw loginError;
+            }
+
+          } else {
+
+            throw loginError;
+          }
+
+        } else {
+
+          throw loginError;
+        }
+      }
 
 
       const loggedUser =
         credential.user;
 
 
+      /* =========================
+         GET FIRESTORE PROFILE
+         ========================= */
+
+      const profileRef =
+        doc(
+          db,
+          "users",
+          loggedUser.uid
+        );
+
+
       const profileDoc =
         await getDoc(
-          doc(
-            db,
-            "users",
-            loggedUser.uid
-          )
+          profileRef
         );
 
 
@@ -2763,8 +2935,13 @@ $("#loginBtn").onclick =
 
         await signOut(auth);
 
+        user = null;
+
+        profile = null;
+
+
         $("#loginMsg").textContent =
-          "حساب Firebase موجود، لكن بيانات الحساب غير موجودة في Firestore.";
+          "الحساب موجود في Firebase Authentication لكن بيانات الحساب غير موجودة. لازم إنشاء الحساب من جديد.";
 
         return;
       }
@@ -2774,18 +2951,31 @@ $("#loginBtn").onclick =
         profileDoc.data();
 
 
+      /* =========================
+         CHECK ROLE
+         ========================= */
+
       if (
         userProfile.role !== role
       ) {
 
         await signOut(auth);
 
+        user = null;
+
+        profile = null;
+
+
         $("#loginMsg").textContent =
-          "الحساب ده مسجل بنوع حساب مختلف. اختار نوع الحساب الصحيح.";
+          "الحساب ده مسجل بنوع حساب مختلف. اختار النوع الصحيح: عميل أو كابتن.";
 
         return;
       }
 
+
+      /* =========================
+         SUCCESS
+         ========================= */
 
       user =
         loggedUser;
@@ -2797,6 +2987,16 @@ $("#loginBtn").onclick =
       $("#loginMsg").textContent =
         "تم تسجيل الدخول بنجاح ✅";
 
+
+      msg(
+        "أهلاً بيك 👋 تم تسجيل الدخول بنجاح",
+        "success"
+      );
+
+
+      /* =========================
+         OPEN CORRECT SCREEN
+         ========================= */
 
       if (role === "captain") {
 
@@ -2821,60 +3021,36 @@ $("#loginBtn").onclick =
 
 
       if (
-        error.code === "auth/invalid-credential" ||
-        error.code === "auth/wrong-password" ||
-        error.code === "auth/user-not-found"
+        error.code ===
+        "auth/api-key-not-valid"
       ) {
 
-        const legacyEmail =
-          legacyLoginEmail(
-            phoneNumber
-          );
+        $("#loginMsg").textContent =
+          "Firebase رفض مفتاح التطبيق. الكود متصل بمشروع Firebase لكن مفتاح API يحتاج مراجعة.";
 
-
-        if (
-          legacyEmail &&
-          role === "customer" &&
-          legacyEmail !==
-            loginEmail(
-              phoneNumber,
-              role
-            )
-        ) {
-
-          try {
-
-            authBusy = true;
-
-            await signInWithEmailAndPassword(
-              auth,
-              legacyEmail,
-              password
-            );
-
-
-            return;
-
-          } catch (legacyError) {
-
-            console.error(
-              "LEGACY LOGIN ERROR:",
-              legacyError
-            );
-          }
-        }
       }
 
+      else if (
+        error.code ===
+        "auth/network-request-failed"
+      ) {
 
-      if (
+        $("#loginMsg").textContent =
+          "تعذر الاتصال بـ Firebase. تأكد من الإنترنت وحاول مرة أخرى.";
+
+      }
+
+      else if (
         error.code ===
         "auth/too-many-requests"
       ) {
 
         $("#loginMsg").textContent =
-          "محاولات كثيرة. انتظر قليلاً ثم حاول مرة أخرى.";
+          "محاولات دخول كثيرة. انتظر قليلاً ثم حاول مرة أخرى.";
 
-      } else if (
+      }
+
+      else if (
         error.code ===
         "auth/user-disabled"
       ) {
@@ -2882,35 +3058,72 @@ $("#loginBtn").onclick =
         $("#loginMsg").textContent =
           "الحساب متوقف من Firebase Authentication.";
 
-      } else if (
+      }
+
+      else if (
         error.code ===
         "auth/invalid-credential"
       ) {
 
         $("#loginMsg").textContent =
-          "رقم الموبايل أو كلمة المرور غير صحيحة.";
+          "رقم الموبايل أو كلمة المرور غير صحيحة، أو الحساب غير موجود.";
 
-      } else if (
+      }
+
+      else if (
         error.code ===
         "auth/user-not-found"
       ) {
 
         $("#loginMsg").textContent =
-          "الحساب غير موجود بهذا النوع. تأكد أنك اخترت عميل أو كابتن بشكل صحيح.";
+          "الحساب غير موجود بهذا النوع. جرّب اختيار عميل أو كابتن بشكل صحيح.";
 
-      } else {
+      }
+
+      else if (
+        error.code ===
+        "auth/wrong-password"
+      ) {
 
         $("#loginMsg").textContent =
-          "رقم الموبايل أو كلمة المرور غير صحيحة، أو الحساب غير موجود.";
+          "كلمة المرور غير صحيحة.";
+
       }
+
+      else if (
+        error.code ===
+        "permission-denied"
+      ) {
+
+        $("#loginMsg").textContent =
+          "تم تسجيل الدخول لكن Firebase رفض قراءة بيانات الحساب.";
+
+      }
+
+      else {
+
+        $("#loginMsg").textContent =
+          error.message ||
+          "تعذر تسجيل الدخول. حاول مرة أخرى.";
+      }
+
 
     } finally {
 
       authBusy = false;
+
+      button.disabled = false;
+
+      button.textContent =
+        "تسجيل الدخول";
     }
   };
+  return await getDownloadURL(
+    storageRef
+  );
+}
 
-
+     
 /* =========================================================
    LOAD PROFILE
    ========================================================= */
