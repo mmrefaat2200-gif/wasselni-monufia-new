@@ -4,7 +4,16 @@ const config: CapacitorConfig = {
   appId: "com.wasselni.monufia.app",
   appName: "وصلني المنوفية",
   webDir: "dist",
-  androidScheme: "https"
+
+  androidScheme: "https",
+
+  plugins: {
+    Geolocation: {
+      permissions: {
+        location: "whenInUse"
+      }
+    }
+  }
 };
 
 export default config;
