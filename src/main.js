@@ -172,7 +172,11 @@ function createInternalLoginEmail(phone, role) {
 function firebaseErrorMessage(error) {
   const code = error?.code || "unknown";
 
-  console.error("Firebase error:", code, error);
+  console.error(
+    "Firebase error:",
+    code,
+    error
+  );
 
   const messages = {
     "auth/invalid-credential":
@@ -311,37 +315,31 @@ function renderHome() {
   if (!root) return;
 
   root.innerHTML = `
-    <div class="page-container">
+    <div class="brand">
+      <h1>وصلني المنوفية</h1>
+      <p>مشوارك أسهل وأسرع</p>
+    </div>
 
-      <div class="brand">
-        <h1>وصلني المنوفية</h1>
-        <p>مشوارك أسهل وأسرع</p>
-      </div>
+    <div class="home-card">
+      <h3>اختار طريقة الدخول</h3>
 
-      <div class="home-card">
+      <button
+        id="customerLoginBtn"
+        class="primary-btn">
+        👤 الدخول كعميل
+      </button>
 
-        <h3>اختار طريقة الدخول</h3>
+      <button
+        id="captainLoginBtn"
+        class="secondary-btn">
+        🚕 الدخول ككابتن
+      </button>
 
-        <button
-          id="customerLoginBtn"
-          class="primary-btn">
-          👤 الدخول كعميل
-        </button>
-
-        <button
-          id="captainLoginBtn"
-          class="secondary-btn">
-          🚕 الدخول ككابتن
-        </button>
-
-        <button
-          id="registerBtn"
-          class="secondary-btn">
-          إنشاء حساب جديد
-        </button>
-
-      </div>
-
+      <button
+        id="registerBtn"
+        class="secondary-btn">
+        إنشاء حساب جديد
+      </button>
     </div>
   `;
 
@@ -384,177 +382,161 @@ function renderAuth(
   if (!root) return;
 
   root.innerHTML = `
-    <div class="page-container">
+    <button
+      id="backBtn"
+      class="back-btn">
+      ← رجوع
+    </button>
 
-      <button
-        id="backBtn"
-        class="back-btn">
-        ← رجوع
-      </button>
+    <div class="auth-card">
 
-      <div class="auth-card">
-
-        <h2>
-          ${
-            isRegister
-              ? "إنشاء حساب جديد"
-              : "تسجيل الدخول"
-          }
-        </h2>
-
-        <div class="role-switch">
-
-          <button
-            id="customerRoleBtn"
-            class="${
-              role === "customer"
-                ? "active"
-                : ""
-            }">
-            👤 عميل
-          </button>
-
-          <button
-            id="captainRoleBtn"
-            class="${
-              role === "captain"
-                ? "active"
-                : ""
-            }">
-            🚕 كابتن
-          </button>
-
-        </div>
-
-        <div class="selected-role-text">
-          ${
-            role === "customer"
-              ? "أنت الآن تدخل كعميل"
-              : "أنت الآن تدخل ككابتن"
-          }
-        </div>
-
-        <div class="input-group">
-
-          <label>رقم الهاتف</label>
-
-          <input
-            id="phoneInput"
-            type="tel"
-            inputmode="numeric"
-            autocomplete="tel"
-            placeholder="01xxxxxxxxx"
-          />
-
-        </div>
-
+      <h2>
         ${
           isRegister
-            ? `
-              <div class="input-group">
-
-                <label>الاسم بالكامل</label>
-
-                <input
-                  id="nameInput"
-                  type="text"
-                  autocomplete="name"
-                  placeholder="اكتب اسمك"
-                />
-
-              </div>
-            `
-            : ""
+            ? "إنشاء حساب جديد"
+            : "تسجيل الدخول"
         }
+      </h2>
 
-        ${
-          isRegister && role === "captain"
-            ? `
-              <div class="input-group">
-
-                <label>نوع السيارة</label>
-
-                <input
-                  id="carTypeInput"
-                  type="text"
-                  placeholder="سيدان"
-                />
-
-              </div>
-
-              <div class="input-group">
-
-                <label>موديل السيارة</label>
-
-                <input
-                  id="carModelInput"
-                  type="text"
-                  placeholder="لانسر"
-                />
-
-              </div>
-
-              <div class="input-group">
-
-                <label>رقم السيارة</label>
-
-                <input
-                  id="carNumberInput"
-                  type="text"
-                  placeholder="م ن 1234"
-                />
-
-              </div>
-            `
-            : ""
-        }
-
-        <div class="input-group">
-
-          <label>كلمة المرور</label>
-
-          <input
-            id="passwordInput"
-            type="password"
-            autocomplete="${
-              isRegister
-                ? "new-password"
-                : "current-password"
-            }"
-            placeholder="كلمة المرور"
-          />
-
-        </div>
+      <div class="role-switch">
 
         <button
-          id="authBtn"
-          class="primary-btn">
-          ${
-            isRegister
-              ? "إنشاء الحساب"
-              : "دخول"
-          }
+          id="customerRoleBtn"
+          class="${
+            role === "customer"
+              ? "active"
+              : ""
+          }">
+          👤 عميل
         </button>
 
-        ${
-          isRegister
-            ? `
-              <button
-                id="loginInsteadBtn"
-                class="link-btn">
-                عندي حساب بالفعل
-              </button>
-            `
-            : `
-              <button
-                id="registerInsteadBtn"
-                class="link-btn">
-                إنشاء حساب جديد
-              </button>
-            `
-        }
+        <button
+          id="captainRoleBtn"
+          class="${
+            role === "captain"
+              ? "active"
+              : ""
+          }">
+          🚕 كابتن
+        </button>
 
       </div>
+
+      <div class="selected-role-text">
+        ${
+          role === "customer"
+            ? "أنت الآن تدخل كعميل"
+            : "أنت الآن تدخل ككابتن"
+        }
+      </div>
+
+      <div class="input-group">
+        <label>رقم الهاتف</label>
+
+        <input
+          id="phoneInput"
+          type="tel"
+          inputmode="numeric"
+          autocomplete="tel"
+          placeholder="01xxxxxxxxx"
+        />
+      </div>
+
+      ${
+        isRegister
+          ? `
+            <div class="input-group">
+              <label>الاسم بالكامل</label>
+
+              <input
+                id="nameInput"
+                type="text"
+                autocomplete="name"
+                placeholder="اكتب اسمك"
+              />
+            </div>
+          `
+          : ""
+      }
+
+      ${
+        isRegister && role === "captain"
+          ? `
+            <div class="input-group">
+              <label>نوع السيارة</label>
+
+              <input
+                id="carTypeInput"
+                type="text"
+                placeholder="سيدان"
+              />
+            </div>
+
+            <div class="input-group">
+              <label>موديل السيارة</label>
+
+              <input
+                id="carModelInput"
+                type="text"
+                placeholder="لانسر"
+              />
+            </div>
+
+            <div class="input-group">
+              <label>رقم السيارة</label>
+
+              <input
+                id="carNumberInput"
+                type="text"
+                placeholder="م ن 1234"
+              />
+            </div>
+          `
+          : ""
+      }
+
+      <div class="input-group">
+        <label>كلمة المرور</label>
+
+        <input
+          id="passwordInput"
+          type="password"
+          autocomplete="${
+            isRegister
+              ? "new-password"
+              : "current-password"
+          }"
+          placeholder="كلمة المرور"
+        />
+      </div>
+
+      <button
+        id="authBtn"
+        class="primary-btn">
+        ${
+          isRegister
+            ? "إنشاء الحساب"
+            : "دخول"
+        }
+      </button>
+
+      ${
+        isRegister
+          ? `
+            <button
+              id="loginInsteadBtn"
+              class="link-btn">
+              عندي حساب بالفعل
+            </button>
+          `
+          : `
+            <button
+              id="registerInsteadBtn"
+              class="link-btn">
+              إنشاء حساب جديد
+            </button>
+          `
+      }
 
     </div>
   `;
@@ -719,6 +701,7 @@ async function registerAccount() {
     );
 
     currentUser = result.user;
+
     currentProfile = {
       ...profile,
       createdAt: null
@@ -849,7 +832,8 @@ async function loginAccount() {
 
     if (
       currentProfile.role &&
-      currentProfile.role !== roleAtLogin
+      currentProfile.role !==
+        roleAtLogin
     ) {
       await signOut(auth);
 
@@ -913,51 +897,45 @@ function renderCustomerHome(profile) {
   if (!root) return;
 
   root.innerHTML = `
-    <div class="page-container">
+    <div class="dashboard">
 
-      <div class="dashboard">
+      <div class="dashboard-header">
+        <h2>
+          أهلاً ${
+            escapeHtml(
+              profile?.name || "بك"
+            )
+          } 👋
+        </h2>
 
-        <div class="dashboard-header">
-
-          <h2>
-            أهلاً ${
-              escapeHtml(
-                profile?.name || "بك"
-              )
-            } 👋
-          </h2>
-
-          <p>
-            عميل - وصلني المنوفية
-          </p>
-
-        </div>
-
-        <button
-          id="newTripBtn"
-          class="primary-btn big-btn">
-          🚕 رحلة جديدة
-        </button>
-
-        <button
-          id="myTripsBtn"
-          class="secondary-btn">
-          📋 رحلاتي
-        </button>
-
-        <button
-          id="accountBtn"
-          class="secondary-btn">
-          👤 حسابي
-        </button>
-
-        <button
-          id="logoutBtn"
-          class="danger-btn">
-          تسجيل الخروج
-        </button>
-
+        <p>
+          عميل - وصلني المنوفية
+        </p>
       </div>
+
+      <button
+        id="newTripBtn"
+        class="primary-btn big-btn">
+        🚕 رحلة جديدة
+      </button>
+
+      <button
+        id="myTripsBtn"
+        class="secondary-btn">
+        📋 رحلاتي
+      </button>
+
+      <button
+        id="accountBtn"
+        class="secondary-btn">
+        👤 حسابي
+      </button>
+
+      <button
+        id="logoutBtn"
+        class="danger-btn">
+        تسجيل الخروج
+      </button>
 
     </div>
   `;
@@ -992,42 +970,38 @@ function renderCustomerAccount() {
     currentProfile || {};
 
   appRoot().innerHTML = `
-    <div class="page-container">
+    <button
+      id="backBtn"
+      class="back-btn">
+      ← رجوع
+    </button>
 
-      <button
-        id="backBtn"
-        class="back-btn">
-        ← رجوع
-      </button>
+    <div class="dashboard">
 
-      <div class="dashboard">
+      <div class="dashboard-header">
+        <h2>👤 حسابي</h2>
+      </div>
 
-        <div class="dashboard-header">
-          <h2>👤 حسابي</h2>
-        </div>
+      <div class="profile-box">
 
-        <div class="profile-box">
+        <p>
+          <strong>الاسم:</strong>
+          ${escapeHtml(
+            profile.name || "-"
+          )}
+        </p>
 
-          <p>
-            <strong>الاسم:</strong>
-            ${escapeHtml(
-              profile.name || "-"
-            )}
-          </p>
+        <p>
+          <strong>رقم الهاتف:</strong>
+          ${escapeHtml(
+            profile.phone || "-"
+          )}
+        </p>
 
-          <p>
-            <strong>رقم الهاتف:</strong>
-            ${escapeHtml(
-              profile.phone || "-"
-            )}
-          </p>
-
-          <p>
-            <strong>نوع الحساب:</strong>
-            عميل
-          </p>
-
-        </div>
+        <p>
+          <strong>نوع الحساب:</strong>
+          عميل
+        </p>
 
       </div>
 
@@ -1055,70 +1029,66 @@ function renderCaptainHome(profile) {
   if (!root) return;
 
   root.innerHTML = `
-    <div class="page-container">
+    <div class="dashboard">
 
-      <div class="dashboard">
+      <div class="dashboard-header">
 
-        <div class="dashboard-header">
+        <h2>
+          أهلاً ${
+            escapeHtml(
+              profile?.name || "كابتن"
+            )
+          } 🚕
+        </h2>
 
-          <h2>
-            أهلاً ${
-              escapeHtml(
-                profile?.name || "كابتن"
-              )
-            } 🚕
-          </h2>
-
-          <p>
-            منصة الكباتن - وصلني المنوفية
-          </p>
-
-        </div>
-
-        <button
-          id="availableTripsBtn"
-          class="primary-btn big-btn">
-          🚕 الرحلات المتاحة
-        </button>
-
-        <button
-          id="captainTripsBtn"
-          class="secondary-btn">
-          📋 رحلاتي ككابتن
-        </button>
-
-        <div class="profile-box">
-
-          <p>
-            <strong>نوع السيارة:</strong>
-            ${escapeHtml(
-              profile?.carType || "-"
-            )}
-          </p>
-
-          <p>
-            <strong>الموديل:</strong>
-            ${escapeHtml(
-              profile?.carModel || "-"
-            )}
-          </p>
-
-          <p>
-            <strong>رقم السيارة:</strong>
-            ${escapeHtml(
-              profile?.carNumber || "-"
-            )}
-          </p>
-
-        </div>
-
-        <button
-          id="logoutBtn"
-          class="danger-btn">
-          تسجيل الخروج
-        </button>
+        <p>
+          منصة الكباتن - وصلني المنوفية
+        </p>
 
       </div>
+
+      <button
+        id="availableTripsBtn"
+        class="primary-btn big-btn">
+        🚕 الرحلات المتاحة
+      </button>
+
+      <button
+        id="captainTripsBtn"
+        class="secondary-btn">
+        📋 رحلاتي ككابتن
+      </button>
+
+      <div class="profile-box">
+
+        <p>
+          <strong>نوع السيارة:</strong>
+          ${escapeHtml(
+            profile?.carType || "-"
+          )}
+        </p>
+
+        <p>
+          <strong>الموديل:</strong>
+          ${escapeHtml(
+            profile?.carModel || "-"
+          )}
+        </p>
+
+        <p>
+          <strong>رقم السيارة:</strong>
+          ${escapeHtml(
+            profile?.carNumber || "-"
+          )}
+        </p>
+
+      </div>
+
+      <button
+        id="logoutBtn"
+        class="danger-btn">
+        تسجيل الخروج
+      </button>
 
     </div>
   `;
@@ -1183,140 +1153,136 @@ function renderNewTripPage(
   }
 
   appRoot().innerHTML = `
-    <div class="page-container">
+    <button
+      id="backBtn"
+      class="back-btn">
+      ← رجوع
+    </button>
 
-      <button
-        id="backBtn"
-        class="back-btn">
-        ← رجوع
-      </button>
+    <div class="trip-card">
 
-      <div class="trip-card">
+      <h2>
+        🚕 رحلة جديدة
+      </h2>
 
-        <h2>
-          🚕 رحلة جديدة
-        </h2>
+      <div class="input-group">
 
-        <div class="input-group">
+        <label>
+          مكان الانطلاق
+        </label>
 
-          <label>
-            مكان الانطلاق
-          </label>
-
-          <div class="location-row">
-
-            <input
-              id="pickupAddress"
-              type="text"
-              placeholder="اضغط لتحديد موقعي"
-              readonly
-            />
-
-            <button
-              id="locationBtn"
-              class="location-btn">
-              📍 موقعي
-            </button>
-
-          </div>
-
-        </div>
-
-        <div class="input-group">
-
-          <label>
-            مكان الوصول
-          </label>
-
-          <button
-            id="chooseDestinationBtn"
-            class="map-select-btn">
-            🗺️ اختر مكان الوصول من الخريطة
-          </button>
+        <div class="location-row">
 
           <input
-            id="destinationAddress"
+            id="pickupAddress"
             type="text"
-            placeholder="لم يتم اختيار الوجهة"
+            placeholder="اضغط لتحديد موقعي"
             readonly
           />
 
-        </div>
-
-        <div
-          id="routeInfo"
-          style="
-            display:none;
-            margin:12px 0;
-            padding:14px;
-            border-radius:12px;
-            background:#eef7ff;
-            text-align:center;
-          ">
-        </div>
-
-        <div class="input-group">
-
-          <label>
-            عدد الركاب
-          </label>
-
-          <select id="passengerCount">
-
-            ${Array.from(
-              { length: 8 },
-              (_, i) => `
-                <option value="${i + 1}">
-                  ${i + 1}
-                  ${
-                    i === 0
-                      ? "راكب"
-                      : "ركاب"
-                  }
-                </option>
-              `
-            ).join("")}
-
-          </select>
+          <button
+            id="locationBtn"
+            class="location-btn">
+            📍 موقعي
+          </button>
 
         </div>
-
-        <div class="input-group">
-
-          <label>
-            ملاحظات
-          </label>
-
-          <textarea
-            id="tripNotes"
-            rows="3"
-            placeholder="مثلاً: شنطة كبيرة أو محتاج عربية واسعة"></textarea>
-
-        </div>
-
-        <div class="input-group">
-
-          <label>
-            السعر المقترح
-          </label>
-
-          <input
-            id="proposedPrice"
-            type="number"
-            min="1"
-            inputmode="numeric"
-            placeholder="اكتب السعر بالجنيه"
-          />
-
-        </div>
-
-        <button
-          id="submitTripBtn"
-          class="primary-btn big-btn">
-          🚕 اطلب الرحلة
-        </button>
 
       </div>
+
+      <div class="input-group">
+
+        <label>
+          مكان الوصول
+        </label>
+
+        <button
+          id="chooseDestinationBtn"
+          class="map-select-btn">
+          🗺️ اختر مكان الوصول من الخريطة
+        </button>
+
+        <input
+          id="destinationAddress"
+          type="text"
+          placeholder="لم يتم اختيار الوجهة"
+          readonly
+        />
+
+      </div>
+
+      <div
+        id="routeInfo"
+        style="
+          display:none;
+          margin:12px 0;
+          padding:14px;
+          border-radius:12px;
+          background:#eef7ff;
+          text-align:center;
+        ">
+      </div>
+
+      <div class="input-group">
+
+        <label>
+          عدد الركاب
+        </label>
+
+        <select id="passengerCount">
+
+          ${Array.from(
+            { length: 8 },
+            (_, i) => `
+              <option value="${i + 1}">
+                ${i + 1}
+                ${
+                  i === 0
+                    ? "راكب"
+                    : "ركاب"
+                }
+              </option>
+            `
+          ).join("")}
+
+        </select>
+
+      </div>
+
+      <div class="input-group">
+
+        <label>
+          ملاحظات
+        </label>
+
+        <textarea
+          id="tripNotes"
+          rows="3"
+          placeholder="مثلاً: شنطة كبيرة أو محتاج عربية واسعة"></textarea>
+
+      </div>
+
+      <div class="input-group">
+
+        <label>
+          السعر المقترح
+        </label>
+
+        <input
+          id="proposedPrice"
+          type="number"
+          min="1"
+          inputmode="numeric"
+          placeholder="اكتب السعر بالجنيه"
+        />
+
+      </div>
+
+      <button
+        id="submitTripBtn"
+        class="primary-btn big-btn">
+        🚕 اطلب الرحلة
+      </button>
 
     </div>
   `;
@@ -1344,210 +1310,7 @@ function renderNewTripPage(
   ).onclick =
     createTrip;
 
-function renderNewTripPage(
-  preserveLocations = false
-) {
-  if (!preserveLocations) {
-    pickupLocation = null;
-    destinationLocation = null;
-    selectedRoute = null;
-  }
-
-  appRoot().innerHTML = `
-    <div class="page-container">
-
-      <button
-        id="backBtn"
-        class="back-btn">
-        ← رجوع
-      </button>
-
-      <div class="trip-card">
-
-        <h2>
-          🚕 رحلة جديدة
-        </h2>
-
-        <div class="input-group">
-
-          <label>
-            مكان الانطلاق
-          </label>
-
-          <div class="location-row">
-
-            <input
-              id="pickupAddress"
-              type="text"
-              placeholder="اضغط على زر موقعي"
-              readonly
-            />
-
-            <button
-              id="locationBtn"
-              class="location-btn">
-              📍 موقعي
-            </button>
-
-          </div>
-
-        </div>
-
-        <!-- خريطة موقع العميل -->
-        <div
-          id="pickupMap"
-          style="
-            width:100%;
-            height:280px;
-            margin-top:12px;
-            margin-bottom:18px;
-            border-radius:16px;
-            overflow:hidden;
-            display:none;
-            border:1px solid #dbeafe;
-          ">
-        </div>
-
-        <div
-          id="pickupLocationDetails"
-          style="
-            display:none;
-            margin-bottom:15px;
-            padding:12px;
-            border-radius:12px;
-            background:#eef7ff;
-            line-height:1.8;
-            text-align:right;
-          ">
-        </div>
-
-        <div class="input-group">
-
-          <label>
-            مكان الوصول
-          </label>
-
-          <button
-            id="chooseDestinationBtn"
-            class="map-select-btn">
-            🗺️ اختر مكان الوصول من الخريطة
-          </button>
-
-          <input
-            id="destinationAddress"
-            type="text"
-            placeholder="لم يتم اختيار الوجهة"
-            readonly
-          />
-
-        </div>
-
-        <div
-          id="routeInfo"
-          style="
-            display:none;
-            margin:12px 0;
-            padding:14px;
-            border-radius:12px;
-            background:#eef7ff;
-            text-align:center;
-          ">
-        </div>
-
-        <div class="input-group">
-
-          <label>
-            عدد الركاب
-          </label>
-
-          <select id="passengerCount">
-
-            ${Array.from(
-              { length: 8 },
-              (_, i) => `
-                <option value="${i + 1}">
-                  ${i + 1}
-                  ${
-                    i === 0
-                      ? "راكب"
-                      : "ركاب"
-                  }
-                </option>
-              `
-            ).join("")}
-
-          </select>
-
-        </div>
-
-        <div class="input-group">
-
-          <label>
-            ملاحظات
-          </label>
-
-          <textarea
-            id="tripNotes"
-            rows="3"
-            placeholder="مثلاً: شنطة كبيرة أو محتاج عربية واسعة"></textarea>
-
-        </div>
-
-        <div class="input-group">
-
-          <label>
-            السعر المقترح
-          </label>
-
-          <input
-            id="proposedPrice"
-            type="number"
-            min="1"
-            inputmode="numeric"
-            placeholder="اكتب السعر بالجنيه"
-          />
-
-        </div>
-
-        <button
-          id="submitTripBtn"
-          class="primary-btn big-btn">
-          🚕 اطلب الرحلة
-        </button>
-
-      </div>
-
-    </div>
-  `;
-
-  document.getElementById(
-    "backBtn"
-  ).onclick =
-    () =>
-      renderCustomerHome(
-        currentProfile
-      );
-
-  document.getElementById(
-    "locationBtn"
-  ).onclick =
-    getPickupLocation;
-
-  document.getElementById(
-    "chooseDestinationBtn"
-  ).onclick =
-    openDestinationMap;
-
-  document.getElementById(
-    "submitTripBtn"
-  ).onclick =
-    createTrip;
-
-  /*
-     لو عندنا موقع محفوظ، نعرضه مباشرة
-  */
   if (pickupLocation) {
-
     const input =
       document.getElementById(
         "pickupAddress"
@@ -1558,13 +1321,9 @@ function renderNewTripPage(
         pickupLocation.address ||
         "📍 تم تحديد موقعي الحالي";
     }
-
-    showPickupLocationOnMap();
-
   }
 
   if (destinationLocation) {
-
     const input =
       document.getElementById(
         "destinationAddress"
@@ -1575,7 +1334,6 @@ function renderNewTripPage(
         destinationLocation.address ||
         "";
     }
-
   }
 
   if (
@@ -1588,279 +1346,7 @@ function renderNewTripPage(
     );
   }
 }
-/* ======================================================
-   PICKUP MAP
-====================================================== */
 
-function showPickupLocationOnMap() {
-
-  if (!pickupLocation) {
-    return;
-  }
-
-  const mapElement =
-    document.getElementById(
-      "pickupMap"
-    );
-
-  if (!mapElement) {
-    return;
-  }
-
-  mapElement.style.display =
-    "block";
-
-  /*
-     لو فيه خريطة قديمة، نشيلها
-  */
-  const oldMap =
-    mapElement._leaflet_map;
-
-  if (oldMap) {
-    try {
-      oldMap.remove();
-    } catch (error) {
-      console.log(
-        "OLD PICKUP MAP ERROR:",
-        error
-      );
-    }
-
-    mapElement._leaflet_map =
-      null;
-  }
-
-  const lat =
-    Number(
-      pickupLocation.lat
-    );
-
-  const lng =
-    Number(
-      pickupLocation.lng
-    );
-
-  if (
-    !Number.isFinite(lat) ||
-    !Number.isFinite(lng)
-  ) {
-    return;
-  }
-
-  const map =
-    L.map(
-      mapElement,
-      {
-        zoomControl: true,
-        attributionControl: true
-      }
-    ).setView(
-      [lat, lng],
-      18
-    );
-
-  mapElement._leaflet_map =
-    map;
-
-  L.tileLayer(
-    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    {
-      maxZoom: 19,
-      attribution:
-        '&copy; OpenStreetMap contributors'
-    }
-  ).addTo(
-    map
-  );
-
-  /*
-     دائرة حول المكان
-  */
-  L.circle(
-    [lat, lng],
-    {
-      radius: 25
-    }
-  ).addTo(
-    map
-  );
-
-  /*
-     علامة الموقع
-  */
-  const marker =
-    L.marker(
-      [lat, lng]
-    )
-      .addTo(map)
-      .bindPopup(
-        "📍 موقعك الحالي"
-      )
-      .openPopup();
-
-  /*
-     السماح بتحريك العلامة لو احتاج المستخدم
-  */
-  marker.on(
-    "dragend",
-    async () => {
-
-      const position =
-        marker.getLatLng();
-
-      const newLat =
-        Number(
-          position.lat
-        );
-
-      const newLng =
-        Number(
-          position.lng
-        );
-
-      pickupLocation = {
-        lat: newLat,
-        lng: newLng,
-        address:
-          `موقع العميل (${newLat.toFixed(
-            6
-          )}, ${newLng.toFixed(
-            6
-          )})`
-      };
-
-      const input =
-        document.getElementById(
-          "pickupAddress"
-        );
-
-      if (input) {
-        input.value =
-          "📍 جاري تحديد العنوان...";
-      }
-
-      await reverseGeocodePickup(
-        newLat,
-        newLng
-      );
-
-      if (input) {
-        input.value =
-          pickupLocation.address;
-      }
-
-      if (destinationLocation) {
-        await calculateRoadRoute(
-          pickupLocation,
-          destinationLocation
-        );
-      }
-
-    }
-  );
-
-  /*
-     الضغط على الخريطة يغير مكان الانطلاق
-  */
-  map.on(
-    "click",
-    async (event) => {
-
-      const newLat =
-        Number(
-          event.latlng.lat
-        );
-
-      const newLng =
-        Number(
-          event.latlng.lng
-        );
-
-      marker.setLatLng([
-        newLat,
-        newLng
-      ]);
-
-      pickupLocation = {
-        lat: newLat,
-        lng: newLng,
-        address:
-          `موقع العميل (${newLat.toFixed(
-            6
-          )}, ${newLng.toFixed(
-            6
-          )})`
-      };
-
-      const input =
-        document.getElementById(
-          "pickupAddress"
-        );
-
-      if (input) {
-        input.value =
-          "📍 جاري تحديد العنوان...";
-      }
-
-      await reverseGeocodePickup(
-        newLat,
-        newLng
-      );
-
-      if (input) {
-        input.value =
-          pickupLocation.address;
-      }
-
-      if (destinationLocation) {
-        await calculateRoadRoute(
-          pickupLocation,
-          destinationLocation
-        );
-      }
-
-    }
-  );
-
-  /*
-     تحديث حجم الخريطة بعد ظهورها
-  */
-  setTimeout(() => {
-    try {
-      map.invalidateSize();
-    } catch (error) {
-      console.log(
-        "PICKUP MAP RESIZE ERROR:",
-        error
-      );
-    }
-  }, 200);
-
-  /*
-     عرض التفاصيل
-  */
-  const details =
-    document.getElementById(
-      "pickupLocationDetails"
-    );
-
-  if (details) {
-
-    details.style.display =
-      "block";
-
-    details.innerHTML = `
-      📍 <strong>موقع الانطلاق المحدد</strong>
-      <br>
-      خط العرض:
-      ${lat.toFixed(6)}
-      <br>
-      خط الطول:
-      ${lng.toFixed(6)}
-    `;
-
-  }
-}
 /* ======================================================
    GET CURRENT LOCATION
 ====================================================== */
@@ -1872,14 +1358,32 @@ async function getPickupLocation() {
       "info"
     );
 
-    /* ==========================================
-       ANDROID / CAPACITOR
-    ========================================== */
+    /*
+      Capacitor Android
+    */
 
     if (Capacitor.isNativePlatform()) {
 
+      const pluginAvailable =
+        Capacitor.isPluginAvailable(
+          "Geolocation"
+        );
+
+      if (!pluginAvailable) {
+        showMessage(
+          "إضافة تحديد الموقع غير موجودة في نسخة التطبيق.",
+          "error"
+        );
+        return;
+      }
+
       let permissions =
         await Geolocation.checkPermissions();
+
+      console.log(
+        "LOCATION PERMISSIONS:",
+        permissions
+      );
 
       if (
         permissions.location !==
@@ -1889,12 +1393,17 @@ async function getPickupLocation() {
           await Geolocation.requestPermissions();
       }
 
+      console.log(
+        "LOCATION PERMISSIONS AFTER REQUEST:",
+        permissions
+      );
+
       if (
         permissions.location !==
         "granted"
       ) {
         showMessage(
-          "لم يتم السماح للتطبيق باستخدام الموقع. افتح أذونات التطبيق واسمح بالموقع.",
+          "إذن الموقع مرفوض. افتح إعدادات التطبيق > الأذونات > الموقع واسمح بالموقع.",
           "error"
         );
 
@@ -1965,9 +1474,9 @@ async function getPickupLocation() {
       return;
     }
 
-    /* ==========================================
-       BROWSER
-    ========================================== */
+    /*
+      Browser
+    */
 
     if (!navigator.geolocation) {
       showMessage(
@@ -1980,6 +1489,7 @@ async function getPickupLocation() {
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+
         const lat =
           Number(
             position.coords.latitude
@@ -2025,6 +1535,7 @@ async function getPickupLocation() {
       },
 
       (error) => {
+
         console.error(
           "WEB GEOLOCATION ERROR:",
           error
@@ -2063,7 +1574,9 @@ async function getPickupLocation() {
         maximumAge: 0
       }
     );
+
   } catch (error) {
+
     console.error(
       "GET LOCATION ERROR:",
       error
@@ -2081,7 +1594,7 @@ async function getPickupLocation() {
       text.includes("denied")
     ) {
       showMessage(
-        "لم يتم السماح باستخدام الموقع. اسمح بإذن الموقع من إعدادات التطبيق.",
+        "إذن الموقع مرفوض. افتح إعدادات التطبيق واسمح بالموقع.",
         "error"
       );
 
@@ -2112,53 +1625,49 @@ async function getPickupLocation() {
 
 function openDestinationMap() {
   appRoot().innerHTML = `
-    <div class="map-page">
+    <div class="map-topbar">
 
-      <div class="map-topbar">
+      <button id="closeMapBtn">
+        ✕
+      </button>
 
-        <button id="closeMapBtn">
-          ✕
-        </button>
+      <input
+        id="placeSearch"
+        type="search"
+        placeholder="ابحث عن مدينة، شارع، مستشفى، بنك..."
+      />
 
-        <input
-          id="placeSearch"
-          type="search"
-          placeholder="ابحث عن مدينة، شارع، مستشفى، بنك..."
-        />
+      <button id="searchBtn">
+        🔎
+      </button>
 
-        <button id="searchBtn">
-          🔎
-        </button>
+    </div>
 
+    <div id="destinationMap"></div>
+
+    <div class="map-bottom-panel">
+
+      <div id="selectedPlace">
+        حرّك الخريطة وحدد مكان الوصول
       </div>
 
-      <div id="destinationMap"></div>
-
-      <div class="map-bottom-panel">
-
-        <div id="selectedPlace">
-          حرّك الخريطة وحدد مكان الوصول
-        </div>
-
-        <div
-          id="mapRouteInfo"
-          style="
-            margin-top:8px;
-            padding:8px;
-            display:none;
-            border-radius:10px;
-            background:#eef7ff;
-            text-align:center;
-          ">
-        </div>
-
-        <button
-          id="confirmDestinationBtn"
-          class="primary-btn">
-          تأكيد مكان الوصول
-        </button>
-
+      <div
+        id="mapRouteInfo"
+        style="
+          margin-top:8px;
+          padding:8px;
+          display:none;
+          border-radius:10px;
+          background:#eef7ff;
+          text-align:center;
+        ">
       </div>
+
+      <button
+        id="confirmDestinationBtn"
+        class="primary-btn">
+        تأكيد مكان الوصول
+      </button>
 
     </div>
   `;
@@ -2180,9 +1689,7 @@ function openDestinationMap() {
   ).addEventListener(
     "keydown",
     (event) => {
-      if (
-        event.key === "Enter"
-      ) {
+      if (event.key === "Enter") {
         searchPlace();
       }
     }
@@ -2265,11 +1772,9 @@ function initializeDestinationMap() {
     {
       maxZoom: 19,
       attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>'
+        "© OpenStreetMap contributors"
     }
-  ).addTo(
-    tripMap
-  );
+  ).addTo(tripMap);
 
   if (pickupLocation) {
     pickupMarker =
@@ -2284,9 +1789,7 @@ function initializeDestinationMap() {
   }
 
   destinationMarker =
-    L.marker(
-      center
-    )
+    L.marker(center)
       .addTo(tripMap)
       .bindPopup(
         "🏁 مكان الوصول"
@@ -2500,6 +2003,7 @@ async function searchPlace() {
       "تم العثور على المكان ✅",
       "success"
     );
+
   } catch (error) {
     console.error(
       "SEARCH ERROR:",
@@ -2563,6 +2067,7 @@ async function reverseGeocodeDestination(
           destinationLocation.address
         }`;
     }
+
   } catch (error) {
     console.log(
       "Reverse geocoding failed",
@@ -2663,6 +2168,7 @@ async function calculateRoadRoute(
     );
 
     return selectedRoute;
+
   } catch (error) {
     console.error(
       "OSRM ROUTE ERROR:",
@@ -2702,16 +2208,12 @@ function showRouteInfo(
   const html = `
     📏 المسافة:
     <strong>
-      ${formatDistance(
-        distanceKm
-      )}
+      ${formatDistance(distanceKm)}
     </strong>
     <br>
     ⏱️ الوقت التقريبي:
     <strong>
-      ${formatDuration(
-        durationMinutes
-      )}
+      ${formatDuration(durationMinutes)}
     </strong>
   `;
 
@@ -2825,6 +2327,7 @@ async function confirmDestination() {
       "تم تحديد مكان الوصول بنجاح ✅",
       "success"
     );
+
   } catch (error) {
     console.error(error);
 
@@ -2932,7 +2435,9 @@ async function createTrip() {
     if (
       !route ||
       !Number.isFinite(
-        Number(route.distanceKm)
+        Number(
+          route.distanceKm
+        )
       )
     ) {
       route =
@@ -3138,6 +2643,7 @@ async function createTrip() {
         currentProfile
       );
     };
+
   } catch (error) {
     console.error(
       "CREATE TRIP ERROR:",
@@ -3183,35 +2689,31 @@ function renderAvailableTrips() {
   stopAllListeners();
 
   appRoot().innerHTML = `
-    <div class="page-container">
+    <button
+      id="backCaptainHomeBtn"
+      class="back-btn">
+      ← رجوع
+    </button>
 
-      <button
-        id="backCaptainHomeBtn"
-        class="back-btn">
-        ← رجوع
-      </button>
+    <div class="dashboard">
 
-      <div class="dashboard">
+      <div class="dashboard-header">
 
-        <div class="dashboard-header">
+        <h2>
+          🚕 الرحلات المتاحة
+        </h2>
 
-          <h2>
-            🚕 الرحلات المتاحة
-          </h2>
+        <p>
+          الرحلات الجديدة تظهر هنا تلقائيًا
+        </p>
 
-          <p>
-            الرحلات الجديدة تظهر هنا تلقائيًا
-          </p>
+      </div>
 
-        </div>
+      <div id="availableTripsList">
 
-        <div id="availableTripsList">
-
-          <div class="loading-screen">
-            <div class="loader"></div>
-            <p>جاري تحميل الرحلات...</p>
-          </div>
-
+        <div class="loading-screen">
+          <div class="loader"></div>
+          <p>جاري تحميل الرحلات...</p>
         </div>
 
       </div>
@@ -3288,7 +2790,8 @@ function listenForAvailableTrips() {
           snapshot.forEach(
             (tripDoc) => {
               trips.push({
-                id: tripDoc.id,
+                id:
+                  tripDoc.id,
                 ...tripDoc.data()
               });
             }
@@ -3321,6 +2824,7 @@ function listenForAvailableTrips() {
             }
           );
         },
+
         (error) => {
           console.error(
             "CAPTAIN TRIPS ERROR:",
@@ -3346,12 +2850,15 @@ function listenForAvailableTrips() {
           `;
         }
       );
+
   } catch (error) {
     console.error(error);
 
     list.innerHTML = `
       <div class="empty-state">
-        <h3>تعذر تحميل الرحلات</h3>
+        <h3>
+          تعذر تحميل الرحلات
+        </h3>
       </div>
     `;
   }
@@ -3541,7 +3048,6 @@ function createCaptainTripCard(
 
   return card;
 }
-
 /* ======================================================
    OFFER DIALOG
 ====================================================== */
@@ -3565,81 +3071,78 @@ function openOfferDialog(
   dialog.id =
     "offerDialog";
 
+  dialog.style.cssText = `
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.55);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:99999;
+    padding:15px;
+  `;
+
   dialog.innerHTML = `
     <div
       style="
-        position:fixed;
-        inset:0;
-        background:rgba(0,0,0,.55);
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        z-index:99999;
+        background:#fff;
+        width:100%;
+        max-width:420px;
+        border-radius:18px;
         padding:20px;
+        direction:rtl;
       ">
+
+      <h3>
+        💰 تقديم عرض سعر
+      </h3>
+
+      <p>
+        السعر المقترح من العميل:
+        <strong>
+          ${escapeHtml(
+            trip.proposedPrice || 0
+          )} جنيه
+        </strong>
+      </p>
+
+      <div class="input-group">
+
+        <label>
+          السعر الذي تقترحه
+        </label>
+
+        <input
+          id="offerPriceInput"
+          type="number"
+          min="1"
+          inputmode="numeric"
+          placeholder="اكتب السعر"
+          value="${
+            trip.proposedPrice || ""
+          }"
+        />
+
+      </div>
 
       <div
         style="
-          background:#fff;
-          width:100%;
-          max-width:420px;
-          border-radius:18px;
-          padding:20px;
-          direction:rtl;
+          display:flex;
+          gap:10px;
+          margin-top:15px;
         ">
 
-        <h3>
-          💰 تقديم عرض سعر
-        </h3>
+        <button
+          id="cancelOfferBtn"
+          class="secondary-btn">
+          إلغاء
+        </button>
 
-        <p>
-          السعر المقترح من العميل:
-          <strong>
-            ${escapeHtml(
-              trip.proposedPrice || 0
-            )} جنيه
-          </strong>
-        </p>
-
-        <div class="input-group">
-
-          <label>
-            السعر الذي تقترحه
-          </label>
-
-          <input
-            id="offerPriceInput"
-            type="number"
-            min="1"
-            inputmode="numeric"
-            placeholder="اكتب السعر"
-            value="${
-              trip.proposedPrice || ""
-            }"
-          />
-
-        </div>
-
-        <div
-          style="
-            display:flex;
-            gap:10px;
-            margin-top:15px;
-          ">
-
-          <button
-            id="cancelOfferBtn"
-            class="secondary-btn">
-            إلغاء
-          </button>
-
-          <button
-            id="sendOfferBtn"
-            class="primary-btn">
-            إرسال العرض
-          </button>
-
-        </div>
+        <button
+          id="sendOfferBtn"
+          class="primary-btn">
+          إرسال العرض
+        </button>
 
       </div>
 
@@ -3658,7 +3161,8 @@ function openOfferDialog(
 
   document.getElementById(
     "sendOfferBtn"
-  ).onclick = () => {
+  ).onclick = async () => {
+
     const value =
       Number(
         document.getElementById(
@@ -3675,13 +3179,13 @@ function openOfferDialog(
       return;
     }
 
-    sendTripOffer(
+    dialog.remove();
+
+    await sendTripOffer(
       trip,
       tripId,
       value
     );
-
-    dialog.remove();
   };
 }
 
@@ -3723,77 +3227,74 @@ async function sendTripOffer(
         )
       );
 
-    let alreadyExists = false;
-
-    const unsubscribe =
-      onSnapshot(
-        existingQuery,
-        (snapshot) => {
-          alreadyExists =
-            !snapshot.empty;
+    const existingSnapshot =
+      await new Promise(
+        (resolve, reject) => {
+          const unsubscribe =
+            onSnapshot(
+              existingQuery,
+              (snapshot) => {
+                unsubscribe();
+                resolve(snapshot);
+              },
+              (error) => {
+                unsubscribe();
+                reject(error);
+              }
+            );
         }
       );
 
-    setTimeout(
-      async () => {
-        unsubscribe();
+    if (!existingSnapshot.empty) {
+      showMessage(
+        "أنت قدمت عرضًا لهذه الرحلة بالفعل.",
+        "error"
+      );
 
-        if (alreadyExists) {
-          showMessage(
-            "أنت قدمت عرضًا لهذه الرحلة بالفعل.",
-            "error"
-          );
+      return;
+    }
 
-          return;
-        }
+    await addDoc(
+      collection(
+        db,
+        "trips",
+        tripId,
+        "offers"
+      ),
+      {
+        captainId:
+          currentUser.uid,
 
-        await addDoc(
-          collection(
-            db,
-            "trips",
-            tripId,
-            "offers"
-          ),
-          {
-            captainId:
-              currentUser.uid,
+        captainName:
+          currentProfile.name || "",
 
-            captainName:
-              currentProfile.name ||
-              "",
+        captainPhone:
+          currentProfile.phone || "",
 
-            captainPhone:
-              currentProfile.phone ||
-              "",
+        carType:
+          currentProfile.carType || "",
 
-            carType:
-              currentProfile.carType ||
-              "",
+        carModel:
+          currentProfile.carModel || "",
 
-            carModel:
-              currentProfile.carModel ||
-              "",
+        carNumber:
+          currentProfile.carNumber || "",
 
-            carNumber:
-              currentProfile.carNumber ||
-              "",
+        price:
+          Number(price),
 
-            price,
+        status: "pending",
 
-            status: "pending",
-
-            createdAt:
-              serverTimestamp()
-          }
-        );
-
-        showMessage(
-          "تم إرسال عرض السعر للعميل ✅",
-          "success"
-        );
-      },
-      300
+        createdAt:
+          serverTimestamp()
+      }
     );
+
+    showMessage(
+      "تم إرسال عرض السعر للعميل ✅",
+      "success"
+    );
+
   } catch (error) {
     console.error(
       "SEND OFFER ERROR:",
@@ -3830,7 +3331,9 @@ async function acceptTrip(
 
   const confirmed =
     window.confirm(
-      `هل تريد قبول الرحلة بسعر ${trip.proposedPrice || 0} جنيه؟`
+      `هل تريد قبول الرحلة بسعر ${
+        trip.proposedPrice || 0
+      } جنيه؟`
     );
 
   if (!confirmed) return;
@@ -3881,24 +3384,24 @@ async function acceptTrip(
           currentUser.uid,
 
         acceptedCaptainName:
-          currentProfile.name ||
-          "",
+          currentProfile.name || "",
 
         acceptedCaptainPhone:
-          currentProfile.phone ||
-          "",
+          currentProfile.phone || "",
 
         acceptedCaptainCarType:
-          currentProfile.carType ||
-          "",
+          currentProfile.carType || "",
 
         acceptedCaptainCarModel:
-          currentProfile.carModel ||
-          "",
+          currentProfile.carModel || "",
 
         acceptedCaptainCarNumber:
-          currentProfile.carNumber ||
-          "",
+          currentProfile.carNumber || "",
+
+        finalPrice:
+          Number(
+            trip.proposedPrice || 0
+          ),
 
         acceptedAt:
           serverTimestamp()
@@ -3911,6 +3414,7 @@ async function acceptTrip(
     );
 
     renderCaptainTrips();
+
   } catch (error) {
     console.error(
       "ACCEPT TRIP ERROR:",
@@ -3945,35 +3449,31 @@ function renderCustomerTrips() {
   stopAllListeners();
 
   appRoot().innerHTML = `
-    <div class="page-container">
+    <button
+      id="backBtn"
+      class="back-btn">
+      ← رجوع
+    </button>
 
-      <button
-        id="backBtn"
-        class="back-btn">
-        ← رجوع
-      </button>
+    <div class="dashboard">
 
-      <div class="dashboard">
+      <div class="dashboard-header">
 
-        <div class="dashboard-header">
+        <h2>
+          📋 رحلاتي
+        </h2>
 
-          <h2>
-            📋 رحلاتي
-          </h2>
+        <p>
+          تابع رحلاتك والعروض المقدمة عليها
+        </p>
 
-          <p>
-            تابع رحلاتك والعروض المقدمة عليها
-          </p>
+      </div>
 
-        </div>
+      <div id="customerTripsList">
 
-        <div id="customerTripsList">
-
-          <div class="loading-screen">
-            <div class="loader"></div>
-            <p>جاري تحميل رحلاتك...</p>
-          </div>
-
+        <div class="loading-screen">
+          <div class="loader"></div>
+          <p>جاري تحميل رحلاتك...</p>
         </div>
 
       </div>
@@ -4049,7 +3549,8 @@ function listenForCustomerTrips() {
         snapshot.forEach(
           (tripDoc) => {
             trips.push({
-              id: tripDoc.id,
+              id:
+                tripDoc.id,
               ...tripDoc.data()
             });
           }
@@ -4082,6 +3583,7 @@ function listenForCustomerTrips() {
           }
         );
       },
+
       (error) => {
         console.error(
           "CUSTOMER TRIPS ERROR:",
@@ -4090,6 +3592,7 @@ function listenForCustomerTrips() {
 
         list.innerHTML = `
           <div class="empty-state">
+
             <h3>
               تعذر تحميل الرحلات
             </h3>
@@ -4101,6 +3604,7 @@ function listenForCustomerTrips() {
                 )
               )}
             </p>
+
           </div>
         `;
       }
@@ -4191,6 +3695,19 @@ function createCustomerTripCard(
       </div>
 
       <div class="trip-info-row">
+        <strong>⏱️ المدة</strong>
+        <span>
+          ${
+            trip.durationMinutes != null
+              ? formatDuration(
+                  trip.durationMinutes
+                )
+              : "-"
+          }
+        </span>
+      </div>
+
+      <div class="trip-info-row">
         <strong>👥 الركاب</strong>
         <span>
           ${trip.passengerCount || 1}
@@ -4239,6 +3756,45 @@ function createCustomerTripCard(
               </div>
 
               ${
+                trip.acceptedCaptainCarType
+                  ? `
+                    <div>
+                      🚘 السيارة:
+                      ${escapeHtml(
+                        trip.acceptedCaptainCarType
+                      )}
+                    </div>
+                  `
+                  : ""
+              }
+
+              ${
+                trip.acceptedCaptainCarModel
+                  ? `
+                    <div>
+                      🚗 الموديل:
+                      ${escapeHtml(
+                        trip.acceptedCaptainCarModel
+                      )}
+                    </div>
+                  `
+                  : ""
+              }
+
+              ${
+                trip.acceptedCaptainCarNumber
+                  ? `
+                    <div>
+                      🔢 رقم السيارة:
+                      ${escapeHtml(
+                        trip.acceptedCaptainCarNumber
+                      )}
+                    </div>
+                  `
+                  : ""
+              }
+
+              ${
                 trip.acceptedCaptainPhone
                   ? `
                     <a
@@ -4249,6 +3805,19 @@ function createCustomerTripCard(
                       )}">
                       📞 اتصال بالكابتن
                     </a>
+                  `
+                  : ""
+              }
+
+              ${
+                trip.finalPrice != null
+                  ? `
+                    <div class="trip-price">
+                      💰 السعر النهائي:
+                      <strong>
+                        ${trip.finalPrice} جنيه
+                      </strong>
+                    </div>
                   `
                   : ""
               }
@@ -4270,7 +3839,6 @@ function createCustomerTripCard(
         `
         : ""
     }
-
   `;
 
   const offersButton =
@@ -4302,41 +3870,37 @@ function renderTripOffers(
   stopAllListeners();
 
   appRoot().innerHTML = `
-    <div class="page-container">
+    <button
+      id="backBtn"
+      class="back-btn">
+      ← رجوع
+    </button>
 
-      <button
-        id="backBtn"
-        class="back-btn">
-        ← رجوع
-      </button>
+    <div class="dashboard">
 
-      <div class="dashboard">
+      <div class="dashboard-header">
 
-        <div class="dashboard-header">
+        <h2>
+          💰 عروض الكباتن
+        </h2>
 
-          <h2>
-            💰 عروض الكباتن
-          </h2>
+        <p>
+          السعر المقترح:
+          <strong>
+            ${
+              trip.proposedPrice ||
+              0
+            } جنيه
+          </strong>
+        </p>
 
-          <p>
-            السعر المقترح:
-            <strong>
-              ${
-                trip.proposedPrice ||
-                0
-              } جنيه
-            </strong>
-          </p>
+      </div>
 
-        </div>
+      <div id="offersList">
 
-        <div id="offersList">
-
-          <div class="loading-screen">
-            <div class="loader"></div>
-            <p>جاري تحميل العروض...</p>
-          </div>
-
+        <div class="loading-screen">
+          <div class="loader"></div>
+          <p>جاري تحميل العروض...</p>
         </div>
 
       </div>
@@ -4417,7 +3981,8 @@ function listenForTripOffers(
         snapshot.forEach(
           (offerDoc) => {
             offers.push({
-              id: offerDoc.id,
+              id:
+                offerDoc.id,
               ...offerDoc.data()
             });
           }
@@ -4549,6 +4114,7 @@ function listenForTripOffers(
           }
         );
       },
+
       (error) => {
         console.error(
           "OFFERS ERROR:",
@@ -4600,7 +4166,11 @@ async function acceptCaptainOffer(
 
   const confirmed =
     window.confirm(
-      `هل تريد قبول عرض ${offer.price} جنيه من الكابتن ${offer.captainName || ""}؟`
+      `هل تريد قبول عرض ${
+        offer.price
+      } جنيه من الكابتن ${
+        offer.captainName || ""
+      }؟`
     );
 
   if (!confirmed) return;
@@ -4651,24 +4221,19 @@ async function acceptCaptainOffer(
           offer.captainId,
 
         acceptedCaptainName:
-          offer.captainName ||
-          "",
+          offer.captainName || "",
 
         acceptedCaptainPhone:
-          offer.captainPhone ||
-          "",
+          offer.captainPhone || "",
 
         acceptedCaptainCarType:
-          offer.carType ||
-          "",
+          offer.carType || "",
 
         acceptedCaptainCarModel:
-          offer.carModel ||
-          "",
+          offer.carModel || "",
 
         acceptedCaptainCarNumber:
-          offer.carNumber ||
-          "",
+          offer.carNumber || "",
 
         finalPrice:
           Number(
@@ -4699,6 +4264,7 @@ async function acceptCaptainOffer(
     );
 
     renderCustomerTrips();
+
   } catch (error) {
     console.error(
       "ACCEPT OFFER ERROR:",
@@ -4733,35 +4299,31 @@ function renderCaptainTrips() {
   stopAllListeners();
 
   appRoot().innerHTML = `
-    <div class="page-container">
+    <button
+      id="backBtn"
+      class="back-btn">
+      ← رجوع
+    </button>
 
-      <button
-        id="backBtn"
-        class="back-btn">
-        ← رجوع
-      </button>
+    <div class="dashboard">
 
-      <div class="dashboard">
+      <div class="dashboard-header">
 
-        <div class="dashboard-header">
+        <h2>
+          📋 رحلاتي ككابتن
+        </h2>
 
-          <h2>
-            📋 رحلاتي ككابتن
-          </h2>
+        <p>
+          الرحلات التي قبلتها
+        </p>
 
-          <p>
-            الرحلات التي قدمت عليها أو قبلتها
-          </p>
+      </div>
 
-        </div>
+      <div id="captainTripsList">
 
-        <div id="captainTripsList">
-
-          <div class="loading-screen">
-            <div class="loader"></div>
-            <p>جاري تحميل الرحلات...</p>
-          </div>
-
+        <div class="loading-screen">
+          <div class="loader"></div>
+          <p>جاري تحميل الرحلات...</p>
         </div>
 
       </div>
@@ -4791,11 +4353,6 @@ function listenForCaptainTrips() {
     );
 
   if (!list) return;
-
-  /*
-     نبحث عن الرحلات المقبولة بواسطة الكابتن.
-     لا نستخدم orderBy هنا حتى لا نحتاج Composite Index.
-  */
 
   const acceptedQuery =
     query(
@@ -4842,7 +4399,8 @@ function listenForCaptainTrips() {
         snapshot.forEach(
           (tripDoc) => {
             trips.push({
-              id: tripDoc.id,
+              id:
+                tripDoc.id,
               ...tripDoc.data()
             });
           }
@@ -4938,6 +4496,32 @@ function listenForCaptainTrips() {
                 </div>
 
                 <div class="trip-info-row">
+                  <strong>📏 المسافة</strong>
+                  <span>
+                    ${
+                      trip.distanceKm != null
+                        ? formatDistance(
+                            trip.distanceKm
+                          )
+                        : "-"
+                    }
+                  </span>
+                </div>
+
+                <div class="trip-info-row">
+                  <strong>⏱️ المدة</strong>
+                  <span>
+                    ${
+                      trip.durationMinutes != null
+                        ? formatDuration(
+                            trip.durationMinutes
+                          )
+                        : "-"
+                    }
+                  </span>
+                </div>
+
+                <div class="trip-info-row">
                   <strong>👥 الركاب</strong>
                   <span>
                     ${
@@ -4992,6 +4576,7 @@ function listenForCaptainTrips() {
           }
         );
       },
+
       (error) => {
         console.error(
           "CAPTAIN HISTORY ERROR:",
@@ -5024,6 +4609,7 @@ function listenForCaptainTrips() {
 ====================================================== */
 
 if (firebaseReady) {
+
   onAuthStateChanged(
     auth,
     async (user) => {
@@ -5050,6 +4636,7 @@ if (firebaseReady) {
           );
 
         if (!profileSnap.exists()) {
+
           await signOut(auth);
 
           currentUser = null;
@@ -5072,10 +4659,13 @@ if (firebaseReady) {
           currentProfile.role ===
           "captain"
         ) {
+
           renderCaptainHome(
             currentProfile
           );
+
         } else {
+
           renderCustomerHome(
             currentProfile
           );
@@ -5102,6 +4692,9 @@ if (firebaseReady) {
       }
     }
   );
+
 } else {
+
   renderHome();
+
 }
