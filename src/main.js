@@ -79,6 +79,12 @@ let selectedRoute = null;
 let stopTripsListener = null;
 let stopMyTripsListener = null;
 
+/*
+   رقم متابعة تحديد الموقع.
+   بنستخدمه مع watchPosition كحل احتياطي.
+*/
+let locationWatchId = null;
+
 /* ======================================================
    HELPERS
 ====================================================== */
@@ -304,6 +310,628 @@ function stopAllListeners() {
 }
 
 /* ======================================================
+   LOCATION WATCH CLEANUP
+====================================================== */
+
+async function stopLocationWatch() {
+  if (locationWatchId === null) {
+    return;
+  }
+
+  try {
+    await Geolocation.clearWatch({
+      id: locationWatchId
+    });
+  } catch (error) {
+    console.log(
+      "CLEAR LOCATION WATCH ERROR:",
+      error
+    );
+  }
+
+  locationWatchId = null;
+}
+
+/* ======================================================
+   SAVE LOCATION
+====================================================== */
+
+async function savePickupPosition(position) {
+  const lat =
+    Number(position?.coords?.latitude);
+
+  const lng =
+    Number(position?.coords?.longitude);
+
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng)
+  ) {
+    throw new Error("INVALID_LOCATION");
+  }
+
+  pickupLocation = {
+    lat,
+    lng,
+    address:
+      `موقع العميل (${lat.toFixed(
+        6
+      )}, ${lng.toFixed(
+        6
+      )})`
+  };
+
+  const input =
+    document.getElementById(
+      "pickupAddress"
+    );
+
+  if (input) {
+    input.value =
+      "📍 تم تحديد موقعي الحالي";
+  }
+
+  if (destinationLocation) {
+    await calculateRoadRoute(
+      pickupLocation,
+      destinationLocation
+    );
+  }
+
+  return pickupLocation;
+}
+
+/* ======================================================
+   LOCATION ERROR TEXT
+====================================================== */
+
+function locationErrorText(error) {
+  const code =
+    error?.code ||
+    error?.message ||
+    "";
+
+  const text =
+    String(code).toLowerCase();
+
+  if (
+    text.includes("permission") ||
+    text.includes("denied") ||
+    String(code) === "1"
+  ) {
+    return "إذن الموقع غير مسموح. افتح إعدادات التطبيق > الأذونات > الموقع واختر السماح أثناء استخدام التطبيق.";
+  }
+
+  if (
+    text.includes("timeout") ||
+    String(code) === "3"
+  ) {
+    return "تحديد الموقع أخذ وقتًا أطول من المتوقع. تأكد من تشغيل الموقع وحاول مرة أخرى.";
+  }
+
+  if (
+    text.includes("unavailable") ||
+    text.includes("location unavailable") ||
+    String(code) === "2"
+  ) {
+    return "الموقع غير متاح حاليًا. شغّل خدمة الموقع GPS وتأكد أن الإنترنت يعمل.";
+  }
+
+  return "تعذر تحديد موقعك الحالي. تأكد من تشغيل الموقع وحاول مرة أخرى.";
+}
+
+/* ======================================================
+   GET POSITION - NORMAL ACCURACY
+====================================================== */
+
+async function getNormalNativePosition() {
+  return await Geolocation.getCurrentPosition({
+    enableHighAccuracy: false,
+    timeout: 15000,
+    maximumAge: 30000
+  });
+}
+
+/* ======================================================
+   GET POSITION - HIGH ACCURACY
+====================================================== */
+
+async function getHighAccuracyNativePosition() {
+  return await Geolocation.getCurrentPosition({
+    enableHighAccuracy: true,
+    timeout: 30000,
+    maximumAge: 0
+  });
+}
+
+/* ======================================================
+   WATCH POSITION FALLBACK
+====================================================== */
+
+async function watchNativeLocation() {
+  await stopLocationWatch();
+
+  return new Promise(
+    async (resolve, reject) => {
+
+      let finished = false;
+
+      const timer =
+        setTimeout(
+          async () => {
+
+            if (finished) return;
+
+            finished = true;
+
+            await stopLocationWatch();
+
+            reject(
+              new Error(
+                "LOCATION_WATCH_TIMEOUT"
+              )
+            );
+
+          },
+          60000
+        );
+
+      try {
+
+        locationWatchId =
+          await Geolocation.watchPosition(
+            {
+              enableHighAccuracy: false,
+              timeout: 30000,
+              maximumAge: 10000
+            },
+
+            async (position, error) => {
+
+              if (finished) return;
+
+              if (error) {
+                console.log(
+                  "WATCH LOCATION ERROR:",
+                  error
+                );
+
+                return;
+              }
+
+              const lat =
+                Number(
+                  position?.coords?.latitude
+                );
+
+              const lng =
+                Number(
+                  position?.coords?.longitude
+                );
+
+              if (
+                !Number.isFinite(lat) ||
+                !Number.isFinite(lng)
+              ) {
+                return;
+              }
+
+              finished = true;
+
+              clearTimeout(timer);
+
+              await stopLocationWatch();
+
+              resolve(position);
+            }
+          );
+
+      } catch (error) {
+
+        clearTimeout(timer);
+
+        if (!finished) {
+          finished = true;
+
+          await stopLocationWatch();
+
+          reject(error);
+        }
+      }
+    }
+  );
+}
+
+/* ======================================================
+   GET CURRENT LOCATION - NEW METHOD
+====================================================== */
+
+async function getPickupLocation() {
+
+  showMessage(
+    "📍 جاري البحث عن موقعك...",
+    "info"
+  );
+
+  try {
+
+    /*
+      ----------------------------------------------------
+      ANDROID / CAPACITOR
+      ----------------------------------------------------
+    */
+
+    if (
+      Capacitor.isNativePlatform()
+    ) {
+
+      const pluginAvailable =
+        Capacitor.isPluginAvailable(
+          "Geolocation"
+        );
+
+      console.log(
+        "GEOLOCATION PLUGIN:",
+        pluginAvailable
+      );
+
+      if (!pluginAvailable) {
+
+        showMessage(
+          "إضافة الموقع غير موجودة في نسخة التطبيق. أعد بناء التطبيق بعد تثبيت @capacitor/geolocation.",
+          "error"
+        );
+
+        return;
+      }
+
+      /*
+        أول حاجة نشوف حالة الصلاحية
+      */
+
+      let permissions =
+        await Geolocation.checkPermissions();
+
+      console.log(
+        "LOCATION PERMISSION BEFORE:",
+        permissions
+      );
+
+      /*
+        لو الصلاحية مش موجودة نطلبها
+      */
+
+      if (
+        permissions.location !==
+        "granted"
+      ) {
+
+        try {
+
+          permissions =
+            await Geolocation.requestPermissions({
+              permissions: [
+                "location"
+              ]
+            });
+
+        } catch (permissionError) {
+
+          console.error(
+            "LOCATION PERMISSION ERROR:",
+            permissionError
+          );
+
+          showMessage(
+            "لم نتمكن من طلب إذن الموقع. افتح إعدادات التطبيق واسمح باستخدام الموقع.",
+            "error"
+          );
+
+          return;
+        }
+      }
+
+      console.log(
+        "LOCATION PERMISSION AFTER:",
+        permissions
+      );
+
+      /*
+        لو المستخدم رفض الصلاحية
+      */
+
+      if (
+        permissions.location !==
+        "granted"
+      ) {
+
+        showMessage(
+          "إذن الموقع غير مسموح. افتح إعدادات التطبيق > الأذونات > الموقع واختر السماح أثناء استخدام التطبيق.",
+          "error"
+        );
+
+        return;
+      }
+
+      /*
+        --------------------------------------------------
+        المحاولة الأولى:
+        موقع عادي سريع
+        --------------------------------------------------
+      */
+
+      try {
+
+        showMessage(
+          "📡 جاري تحديد موقعك...",
+          "info"
+        );
+
+        const position =
+          await getNormalNativePosition();
+
+        console.log(
+          "NORMAL LOCATION:",
+          position
+        );
+
+        await savePickupPosition(
+          position
+        );
+
+        await stopLocationWatch();
+
+        showMessage(
+          "تم تحديد موقع الانطلاق بنجاح ✅",
+          "success"
+        );
+
+        return;
+
+      } catch (normalError) {
+
+        console.log(
+          "NORMAL LOCATION FAILED:",
+          normalError
+        );
+      }
+
+      /*
+        --------------------------------------------------
+        المحاولة الثانية:
+        GPS بدقة عالية
+        --------------------------------------------------
+      */
+
+      try {
+
+        showMessage(
+          "🛰️ جاري تحديد موقعك بدقة أعلى...",
+          "info"
+        );
+
+        const position =
+          await getHighAccuracyNativePosition();
+
+        console.log(
+          "HIGH ACCURACY LOCATION:",
+          position
+        );
+
+        await savePickupPosition(
+          position
+        );
+
+        await stopLocationWatch();
+
+        showMessage(
+          "تم تحديد موقع الانطلاق بنجاح ✅",
+          "success"
+        );
+
+        return;
+
+      } catch (highError) {
+
+        console.log(
+          "HIGH ACCURACY LOCATION FAILED:",
+          highError
+        );
+      }
+
+      /*
+        --------------------------------------------------
+        المحاولة الثالثة:
+        متابعة الموقع لحظيًا
+        --------------------------------------------------
+      */
+
+      try {
+
+        showMessage(
+          "📍 بنحاول نجيب موقعك من الشبكة وGPS...",
+          "info"
+        );
+
+        const position =
+          await watchNativeLocation();
+
+        console.log(
+          "WATCH LOCATION:",
+          position
+        );
+
+        await savePickupPosition(
+          position
+        );
+
+        showMessage(
+          "تم تحديد موقع الانطلاق بنجاح ✅",
+          "success"
+        );
+
+        return;
+
+      } catch (watchError) {
+
+        console.error(
+          "WATCH LOCATION FAILED:",
+          watchError
+        );
+
+        showMessage(
+          "لم نتمكن من تحديد موقعك. شغّل خدمة الموقع GPS وتأكد من اتصال الإنترنت ثم حاول مرة أخرى.",
+          "error"
+        );
+
+        return;
+      }
+    }
+
+    /*
+      ----------------------------------------------------
+      BROWSER FALLBACK
+      ----------------------------------------------------
+    */
+
+    if (
+      !navigator.geolocation
+    ) {
+
+      showMessage(
+        "الموقع غير مدعوم على هذا الجهاز.",
+        "error"
+      );
+
+      return;
+    }
+
+    showMessage(
+      "📡 جاري تحديد موقعك...",
+      "info"
+    );
+
+    /*
+      محاولة أولى عادية
+    */
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+
+        try {
+
+          await savePickupPosition(
+            position
+          );
+
+          showMessage(
+            "تم تحديد موقع الانطلاق بنجاح ✅",
+            "success"
+          );
+
+        } catch (error) {
+
+          console.error(
+            "BROWSER SAVE LOCATION ERROR:",
+            error
+          );
+
+          showMessage(
+            "تعذر قراءة موقعك الحالي.",
+            "error"
+          );
+        }
+      },
+
+      (firstError) => {
+
+        console.log(
+          "BROWSER NORMAL LOCATION FAILED:",
+          firstError
+        );
+
+        /*
+          محاولة ثانية بدقة عالية
+        */
+
+        showMessage(
+          "🛰️ جاري محاولة تحديد الموقع بدقة أعلى...",
+          "info"
+        );
+
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+
+            try {
+
+              await savePickupPosition(
+                position
+              );
+
+              showMessage(
+                "تم تحديد موقع الانطلاق بنجاح ✅",
+                "success"
+              );
+
+            } catch (error) {
+
+              console.error(
+                "BROWSER HIGH SAVE ERROR:",
+                error
+              );
+
+              showMessage(
+                "تعذر قراءة موقعك الحالي.",
+                "error"
+              );
+            }
+          },
+
+          (secondError) => {
+
+            console.error(
+              "BROWSER HIGH LOCATION ERROR:",
+              secondError
+            );
+
+            showMessage(
+              locationErrorText(
+                secondError
+              ),
+              "error"
+            );
+          },
+
+          {
+            enableHighAccuracy: true,
+            timeout: 30000,
+            maximumAge: 0
+          }
+        );
+      },
+
+      {
+        enableHighAccuracy: false,
+        timeout: 15000,
+        maximumAge: 30000
+      }
+    );
+
+  } catch (error) {
+
+    console.error(
+      "GET PICKUP LOCATION ERROR:",
+      error
+    );
+
+    showMessage(
+      locationErrorText(error),
+      "error"
+    );
+  }
+}
+
+/* ======================================================
    HOME
 ====================================================== */
 
@@ -375,7 +1003,8 @@ function renderAuth(
 ) {
   selectedRole = role;
 
-  const isRegister = mode === "register";
+  const isRegister =
+    mode === "register";
 
   const root = appRoot();
 
@@ -460,7 +1089,8 @@ function renderAuth(
       }
 
       ${
-        isRegister && role === "captain"
+        isRegister &&
+        role === "captain"
           ? `
             <div class="input-group">
               <label>نوع السيارة</label>
@@ -637,7 +1267,9 @@ async function registerAccount() {
     );
 
   try {
-    loading("جاري إنشاء الحساب...");
+    loading(
+      "جاري إنشاء الحساب..."
+    );
 
     const result =
       await createUserWithEmailAndPassword(
@@ -654,7 +1286,10 @@ async function registerAccount() {
       createdAt: serverTimestamp()
     };
 
-    if (selectedRole === "captain") {
+    if (
+      selectedRole === "captain"
+    ) {
+
       profile.carType =
         document.getElementById(
           "carTypeInput"
@@ -675,6 +1310,7 @@ async function registerAccount() {
         !profile.carModel ||
         !profile.carNumber
       ) {
+
         await signOut(auth);
 
         renderAuth(
@@ -700,18 +1336,24 @@ async function registerAccount() {
       profile
     );
 
-    currentUser = result.user;
+    currentUser =
+      result.user;
 
     currentProfile = {
       ...profile,
       createdAt: null
     };
 
-    if (selectedRole === "captain") {
+    if (
+      selectedRole === "captain"
+    ) {
+
       renderCaptainHome(
         currentProfile
       );
+
     } else {
+
       renderCustomerHome(
         currentProfile
       );
@@ -721,7 +1363,9 @@ async function registerAccount() {
       "تم إنشاء الحساب بنجاح ✅",
       "success"
     );
+
   } catch (error) {
+
     console.error(
       "REGISTER ERROR:",
       error
@@ -784,6 +1428,7 @@ async function loginAccount() {
     );
 
   try {
+
     loading(
       roleAtLogin === "captain"
         ? "جاري دخول الكابتن..."
@@ -797,7 +1442,8 @@ async function loginAccount() {
         password
       );
 
-    currentUser = result.user;
+    currentUser =
+      result.user;
 
     const profileSnap =
       await getDoc(
@@ -809,6 +1455,7 @@ async function loginAccount() {
       );
 
     if (!profileSnap.exists()) {
+
       await signOut(auth);
 
       currentUser = null;
@@ -835,6 +1482,7 @@ async function loginAccount() {
       currentProfile.role !==
         roleAtLogin
     ) {
+
       await signOut(auth);
 
       currentUser = null;
@@ -853,11 +1501,16 @@ async function loginAccount() {
       return;
     }
 
-    if (roleAtLogin === "captain") {
+    if (
+      roleAtLogin === "captain"
+    ) {
+
       renderCaptainHome(
         currentProfile
       );
+
     } else {
+
       renderCustomerHome(
         currentProfile
       );
@@ -867,7 +1520,9 @@ async function loginAccount() {
       "تم تسجيل الدخول بنجاح ✅",
       "success"
     );
+
   } catch (error) {
+
     console.error(
       "LOGIN ERROR:",
       error
@@ -889,7 +1544,9 @@ async function loginAccount() {
    CUSTOMER HOME
 ====================================================== */
 
-function renderCustomerHome(profile) {
+function renderCustomerHome(
+  profile
+) {
   stopAllListeners();
 
   const root = appRoot();
@@ -1021,7 +1678,9 @@ function renderCustomerAccount() {
    CAPTAIN HOME
 ====================================================== */
 
-function renderCaptainHome(profile) {
+function renderCaptainHome(
+  profile
+) {
   stopAllListeners();
 
   const root = appRoot();
@@ -1116,11 +1775,16 @@ function renderCaptainHome(profile) {
 async function logoutUser() {
   stopAllListeners();
 
+  await stopLocationWatch();
+
   try {
+
     if (auth) {
       await signOut(auth);
     }
+
   } catch (error) {
+
     console.error(
       "LOGOUT ERROR:",
       error
@@ -1146,6 +1810,7 @@ async function logoutUser() {
 function renderNewTripPage(
   preserveLocations = false
 ) {
+
   if (!preserveLocations) {
     pickupLocation = null;
     destinationLocation = null;
@@ -1311,6 +1976,7 @@ function renderNewTripPage(
     createTrip;
 
   if (pickupLocation) {
+
     const input =
       document.getElementById(
         "pickupAddress"
@@ -1324,6 +1990,7 @@ function renderNewTripPage(
   }
 
   if (destinationLocation) {
+
     const input =
       document.getElementById(
         "destinationAddress"
@@ -1340,324 +2007,10 @@ function renderNewTripPage(
     selectedRoute &&
     destinationLocation
   ) {
+
     showRouteInfo(
       selectedRoute.distanceKm,
       selectedRoute.durationMinutes
-    );
-  }
-}
-
-/* ======================================================
-   GET CURRENT LOCATION
-====================================================== */
-
-async function getPickupLocation() {
-  try {
-    showMessage(
-      "📍 جاري تحديد موقعك...",
-      "info"
-    );
-
-    /* -----------------------------------------------
-       ANDROID / CAPACITOR
-    ------------------------------------------------ */
-
-    if (Capacitor.isNativePlatform()) {
-
-      const pluginAvailable =
-        Capacitor.isPluginAvailable(
-          "Geolocation"
-        );
-
-      console.log(
-        "GEOLOCATION PLUGIN AVAILABLE:",
-        pluginAvailable
-      );
-
-      if (!pluginAvailable) {
-        showMessage(
-          "إضافة تحديد الموقع غير موجودة في نسخة التطبيق. أعد بناء التطبيق بعد تثبيت @capacitor/geolocation.",
-          "error"
-        );
-        return;
-      }
-
-      let permissions =
-        await Geolocation.checkPermissions();
-
-      console.log(
-        "LOCATION PERMISSIONS BEFORE:",
-        permissions
-      );
-
-      /*
-        طلب صلاحية الموقع بشكل صريح
-      */
-
-      if (
-        permissions.location !==
-        "granted"
-      ) {
-        permissions =
-          await Geolocation.requestPermissions({
-            permissions: ["location"]
-          });
-      }
-
-      console.log(
-        "LOCATION PERMISSIONS AFTER:",
-        permissions
-      );
-
-      if (
-        permissions.location !==
-        "granted"
-      ) {
-        showMessage(
-          "إذن الموقع غير مسموح. افتح إعدادات التطبيق > الأذونات > الموقع، ثم اختر السماح أثناء استخدام التطبيق.",
-          "error"
-        );
-
-        return;
-      }
-
-      showMessage(
-        "📡 جاري تحديد موقعك بدقة...",
-        "info"
-      );
-
-      const position =
-        await Geolocation.getCurrentPosition(
-          {
-            enableHighAccuracy: true,
-            timeout: 30000,
-            maximumAge: 0
-          }
-        );
-
-      console.log(
-        "CURRENT POSITION:",
-        position
-      );
-
-      const lat =
-        Number(
-          position?.coords?.latitude
-        );
-
-      const lng =
-        Number(
-          position?.coords?.longitude
-        );
-
-      if (
-        !Number.isFinite(lat) ||
-        !Number.isFinite(lng)
-      ) {
-        throw new Error(
-          "INVALID_LOCATION"
-        );
-      }
-
-      pickupLocation = {
-        lat,
-        lng,
-        address:
-          `موقع العميل (${lat.toFixed(
-            6
-          )}, ${lng.toFixed(
-            6
-          )})`
-      };
-
-      const input =
-        document.getElementById(
-          "pickupAddress"
-        );
-
-      if (input) {
-        input.value =
-          "📍 تم تحديد موقعي الحالي";
-      }
-
-      if (destinationLocation) {
-        await calculateRoadRoute(
-          pickupLocation,
-          destinationLocation
-        );
-      }
-
-      showMessage(
-        "تم تحديد موقع الانطلاق بنجاح ✅",
-        "success"
-      );
-
-      return;
-    }
-
-    /* -----------------------------------------------
-       BROWSER
-    ------------------------------------------------ */
-
-    if (!navigator.geolocation) {
-      showMessage(
-        "الموقع غير مدعوم على هذا الجهاز.",
-        "error"
-      );
-
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-
-        const lat =
-          Number(
-            position.coords.latitude
-          );
-
-        const lng =
-          Number(
-            position.coords.longitude
-          );
-
-        if (
-          !Number.isFinite(lat) ||
-          !Number.isFinite(lng)
-        ) {
-          showMessage(
-            "تعذر قراءة موقعك الحالي.",
-            "error"
-          );
-          return;
-        }
-
-        pickupLocation = {
-          lat,
-          lng,
-          address:
-            `موقع العميل (${lat.toFixed(
-              6
-            )}, ${lng.toFixed(
-              6
-            )})`
-        };
-
-        const input =
-          document.getElementById(
-            "pickupAddress"
-          );
-
-        if (input) {
-          input.value =
-            "📍 تم تحديد موقعي الحالي";
-        }
-
-        if (destinationLocation) {
-          await calculateRoadRoute(
-            pickupLocation,
-            destinationLocation
-          );
-        }
-
-        showMessage(
-          "تم تحديد موقع الانطلاق بنجاح ✅",
-          "success"
-        );
-      },
-
-      (error) => {
-
-        console.error(
-          "WEB GEOLOCATION ERROR:",
-          error
-        );
-
-        if (error.code === 1) {
-          showMessage(
-            "لم يتم السماح باستخدام الموقع.",
-            "error"
-          );
-        } else if (
-          error.code === 2
-        ) {
-          showMessage(
-            "تعذر تحديد موقعك. شغّل GPS وحاول مرة أخرى.",
-            "error"
-          );
-        } else if (
-          error.code === 3
-        ) {
-          showMessage(
-            "انتهى وقت تحديد الموقع. حاول مرة أخرى.",
-            "error"
-          );
-        } else {
-          showMessage(
-            "تعذر تحديد موقعك. حاول مرة أخرى.",
-            "error"
-          );
-        }
-      },
-
-      {
-        enableHighAccuracy: true,
-        timeout: 30000,
-        maximumAge: 0
-      }
-    );
-
-  } catch (error) {
-
-    console.error(
-      "GET LOCATION ERROR:",
-      error
-    );
-
-    const text =
-      String(
-        error?.message ||
-        error?.code ||
-        ""
-      ).toLowerCase();
-
-    if (
-      text.includes("permission") ||
-      text.includes("denied")
-    ) {
-      showMessage(
-        "إذن الموقع مرفوض. افتح إعدادات التطبيق واسمح للموقع أثناء استخدام التطبيق.",
-        "error"
-      );
-
-      return;
-    }
-
-    if (
-      text.includes("timeout")
-    ) {
-      showMessage(
-        "انتهى وقت تحديد الموقع. شغّل GPS وحاول مرة أخرى.",
-        "error"
-      );
-
-      return;
-    }
-
-    if (
-      text.includes("location")
-    ) {
-      showMessage(
-        "تعذر تحديد الموقع الحالي. تأكد من تشغيل GPS وحاول مرة أخرى.",
-        "error"
-      );
-
-      return;
-    }
-
-    showMessage(
-      "حدث خطأ أثناء تحديد موقعك. حاول مرة أخرى.",
-      "error"
     );
   }
 }
@@ -1667,50 +2020,90 @@ async function getPickupLocation() {
 ====================================================== */
 
 function openDestinationMap() {
+
+  destroyMap();
+
   appRoot().innerHTML = `
-    <div class="map-topbar">
+    <div
+      style="
+        width:100%;
+        height:100vh;
+        display:flex;
+        flex-direction:column;
+        background:#fff;
+        overflow:hidden;
+      "
+    >
 
-      <button id="closeMapBtn">
-        ✕
-      </button>
+      <div
+        class="map-topbar"
+        style="
+          flex-shrink:0;
+          z-index:1000;
+        "
+      >
 
-      <input
-        id="placeSearch"
-        type="search"
-        placeholder="ابحث عن مدينة، شارع، مستشفى، بنك..."
-      />
+        <button id="closeMapBtn">
+          ✕
+        </button>
 
-      <button id="searchBtn">
-        🔎
-      </button>
+        <input
+          id="placeSearch"
+          type="search"
+          placeholder="ابحث عن مدينة، شارع، مستشفى، بنك..."
+        />
 
-    </div>
+        <button id="searchBtn">
+          🔎
+        </button>
 
-    <div id="destinationMap"></div>
-
-    <div class="map-bottom-panel">
-
-      <div id="selectedPlace">
-        حرّك الخريطة وحدد مكان الوصول
       </div>
 
       <div
-        id="mapRouteInfo"
+        id="destinationMap"
         style="
-          margin-top:8px;
-          padding:8px;
-          display:none;
-          border-radius:10px;
-          background:#eef7ff;
-          text-align:center;
-        ">
-      </div>
+          width:100%;
+          height:calc(100vh - 180px);
+          min-height:400px;
+          flex:1;
+          background:#e5e5e5;
+          position:relative;
+        "
+      ></div>
 
-      <button
-        id="confirmDestinationBtn"
-        class="primary-btn">
-        تأكيد مكان الوصول
-      </button>
+      <div
+        class="map-bottom-panel"
+        style="
+          flex-shrink:0;
+          z-index:1000;
+          background:#fff;
+          padding:10px;
+        "
+      >
+
+        <div id="selectedPlace">
+          حرّك الخريطة وحدد مكان الوصول
+        </div>
+
+        <div
+          id="mapRouteInfo"
+          style="
+            margin-top:8px;
+            padding:8px;
+            display:none;
+            border-radius:10px;
+            background:#eef7ff;
+            text-align:center;
+          ">
+        </div>
+
+        <button
+          id="confirmDestinationBtn"
+          class="primary-btn">
+          تأكيد مكان الوصول
+        </button>
+
+      </div>
 
     </div>
   `;
@@ -1718,8 +2111,12 @@ function openDestinationMap() {
   document.getElementById(
     "closeMapBtn"
   ).onclick = () => {
+
     destroyMap();
-    renderNewTripPage(true);
+
+    renderNewTripPage(
+      true
+    );
   };
 
   document.getElementById(
@@ -1732,9 +2129,11 @@ function openDestinationMap() {
   ).addEventListener(
     "keydown",
     (event) => {
+
       if (event.key === "Enter") {
         searchPlace();
       }
+
     }
   );
 
@@ -1745,7 +2144,7 @@ function openDestinationMap() {
 
   setTimeout(
     initializeDestinationMap,
-    150
+    300
   );
 }
 
@@ -1754,10 +2153,15 @@ function openDestinationMap() {
 ====================================================== */
 
 function destroyMap() {
+
   if (tripMap) {
+
     try {
+      tripMap.off();
       tripMap.remove();
+
     } catch (error) {
+
       console.log(
         "MAP DESTROY ERROR:",
         error
@@ -1775,12 +2179,17 @@ function destroyMap() {
 ====================================================== */
 
 function initializeDestinationMap() {
+
   const mapElement =
     document.getElementById(
       "destinationMap"
     );
 
   if (!mapElement) return;
+
+  if (tripMap) {
+    destroyMap();
+  }
 
   let center = [
     30.5526,
@@ -1790,6 +2199,7 @@ function initializeDestinationMap() {
   let zoom = 7;
 
   if (pickupLocation) {
+
     center = [
       pickupLocation.lat,
       pickupLocation.lng
@@ -1820,6 +2230,7 @@ function initializeDestinationMap() {
   ).addTo(tripMap);
 
   if (pickupLocation) {
+
     pickupMarker =
       L.marker([
         pickupLocation.lat,
@@ -1846,6 +2257,7 @@ function initializeDestinationMap() {
   tripMap.on(
     "click",
     async (event) => {
+
       await selectMapLocation(
         event.latlng.lat,
         event.latlng.lng,
@@ -1853,6 +2265,40 @@ function initializeDestinationMap() {
       );
     }
   );
+
+  /*
+    إصلاح حجم الخريطة بعد ظهور الصفحة
+  */
+
+  setTimeout(() => {
+
+    if (tripMap) {
+      tripMap.invalidateSize(
+        true
+      );
+    }
+
+  }, 100);
+
+  setTimeout(() => {
+
+    if (tripMap) {
+      tripMap.invalidateSize(
+        true
+      );
+    }
+
+  }, 500);
+
+  setTimeout(() => {
+
+    if (tripMap) {
+      tripMap.invalidateSize(
+        true
+      );
+    }
+
+  }, 1000);
 
   updateMapCenter();
 }
@@ -1862,16 +2308,51 @@ function initializeDestinationMap() {
 ====================================================== */
 
 async function updateMapCenter() {
+
   if (!tripMap) return;
 
   const center =
     tripMap.getCenter();
 
-  await selectMapLocation(
-    center.lat,
-    center.lng,
-    true
-  );
+  /*
+    تحديث النقطة فقط.
+    الـ reverse geocoding هيتم مرة واحدة
+    عند اختيار النقطة، وليس مع كل حركة.
+  */
+
+  destinationLocation = {
+    lat: center.lat,
+    lng: center.lng,
+    address:
+      `نقطة على الخريطة (${center.lat.toFixed(
+        6
+      )}, ${center.lng.toFixed(
+        6
+      )})`
+  };
+
+  if (destinationMarker) {
+
+    destinationMarker.setLatLng([
+      center.lat,
+      center.lng
+    ]);
+  }
+
+  const selected =
+    document.getElementById(
+      "selectedPlace"
+    );
+
+  if (selected) {
+
+    selected.textContent =
+      `📍 ${center.lat.toFixed(
+        6
+      )}, ${center.lng.toFixed(
+        6
+      )}`;
+  }
 }
 
 /* ======================================================
@@ -1883,6 +2364,7 @@ async function selectMapLocation(
   lng,
   reverseGeocode = true
 ) {
+
   destinationLocation = {
     lat,
     lng,
@@ -1895,6 +2377,7 @@ async function selectMapLocation(
   };
 
   if (destinationMarker) {
+
     destinationMarker.setLatLng([
       lat,
       lng
@@ -1907,6 +2390,7 @@ async function selectMapLocation(
     );
 
   if (selected) {
+
     selected.textContent =
       `📍 ${lat.toFixed(
         6
@@ -1916,6 +2400,7 @@ async function selectMapLocation(
   }
 
   if (reverseGeocode) {
+
     await reverseGeocodeDestination(
       lat,
       lng
@@ -1923,6 +2408,7 @@ async function selectMapLocation(
   }
 
   if (pickupLocation) {
+
     await calculateRoadRoute(
       pickupLocation,
       destinationLocation
@@ -1935,6 +2421,7 @@ async function selectMapLocation(
 ====================================================== */
 
 async function searchPlace() {
+
   const input =
     document.getElementById(
       "placeSearch"
@@ -1944,6 +2431,7 @@ async function searchPlace() {
     input?.value.trim();
 
   if (!searchQuery) {
+
     showMessage(
       "اكتب اسم المكان أولاً.",
       "error"
@@ -1953,6 +2441,7 @@ async function searchPlace() {
   }
 
   try {
+
     showMessage(
       "جاري البحث عن المكان...",
       "info"
@@ -1984,6 +2473,7 @@ async function searchPlace() {
       await response.json();
 
     if (!results.length) {
+
       showMessage(
         "لم يتم العثور على المكان.",
         "error"
@@ -2009,6 +2499,7 @@ async function searchPlace() {
     };
 
     if (tripMap) {
+
       tripMap.setView(
         [lat, lng],
         17,
@@ -2016,9 +2507,20 @@ async function searchPlace() {
           animate: true
         }
       );
+
+      setTimeout(() => {
+
+        if (tripMap) {
+          tripMap.invalidateSize(
+            true
+          );
+        }
+
+      }, 300);
     }
 
     if (destinationMarker) {
+
       destinationMarker.setLatLng([
         lat,
         lng
@@ -2031,11 +2533,13 @@ async function searchPlace() {
       );
 
     if (selected) {
+
       selected.textContent =
         `📍 ${first.display_name}`;
     }
 
     if (pickupLocation) {
+
       await calculateRoadRoute(
         pickupLocation,
         destinationLocation
@@ -2048,6 +2552,7 @@ async function searchPlace() {
     );
 
   } catch (error) {
+
     console.error(
       "SEARCH ERROR:",
       error
@@ -2059,7 +2564,6 @@ async function searchPlace() {
     );
   }
 }
-
 /* ======================================================
    REVERSE GEOCODING
 ====================================================== */
@@ -2068,7 +2572,9 @@ async function reverseGeocodeDestination(
   lat,
   lng
 ) {
+
   try {
+
     const url =
       `https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=ar&lat=${lat}&lon=${lng}`;
 
@@ -2092,6 +2598,7 @@ async function reverseGeocodeDestination(
       data?.display_name &&
       destinationLocation
     ) {
+
       destinationLocation.address =
         data.display_name;
     }
@@ -2105,6 +2612,7 @@ async function reverseGeocodeDestination(
       selected &&
       destinationLocation
     ) {
+
       selected.textContent =
         `📍 ${
           destinationLocation.address
@@ -2112,6 +2620,7 @@ async function reverseGeocodeDestination(
     }
 
   } catch (error) {
+
     console.log(
       "Reverse geocoding failed",
       error
@@ -2127,6 +2636,7 @@ async function calculateRoadRoute(
   from,
   to
 ) {
+
   if (!from || !to) {
     return null;
   }
@@ -2142,6 +2652,7 @@ async function calculateRoadRoute(
     );
 
   if (mapRouteInfo) {
+
     mapRouteInfo.style.display =
       "block";
 
@@ -2150,6 +2661,7 @@ async function calculateRoadRoute(
   }
 
   if (pageRouteInfo) {
+
     pageRouteInfo.style.display =
       "block";
 
@@ -2158,6 +2670,7 @@ async function calculateRoadRoute(
   }
 
   try {
+
     const url =
       `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false&steps=false`;
 
@@ -2165,6 +2678,7 @@ async function calculateRoadRoute(
       await fetch(url);
 
     if (!response.ok) {
+
       throw new Error(
         "ROUTE_REQUEST_FAILED"
       );
@@ -2178,6 +2692,7 @@ async function calculateRoadRoute(
       !data.routes ||
       !data.routes.length
     ) {
+
       throw new Error(
         "NO_ROUTE"
       );
@@ -2198,6 +2713,7 @@ async function calculateRoadRoute(
     };
 
     if (destinationLocation) {
+
       destinationLocation.distanceKm =
         distanceKm;
 
@@ -2213,6 +2729,7 @@ async function calculateRoadRoute(
     return selectedRoute;
 
   } catch (error) {
+
     console.error(
       "OSRM ROUTE ERROR:",
       error
@@ -2221,6 +2738,7 @@ async function calculateRoadRoute(
     selectedRoute = null;
 
     if (mapRouteInfo) {
+
       mapRouteInfo.style.display =
         "block";
 
@@ -2229,6 +2747,7 @@ async function calculateRoadRoute(
     }
 
     if (pageRouteInfo) {
+
       pageRouteInfo.style.display =
         "block";
 
@@ -2248,6 +2767,7 @@ function showRouteInfo(
   distanceKm,
   durationMinutes
 ) {
+
   const html = `
     📏 المسافة:
     <strong>
@@ -2266,6 +2786,7 @@ function showRouteInfo(
     );
 
   if (mapRouteInfo) {
+
     mapRouteInfo.style.display =
       "block";
 
@@ -2279,6 +2800,7 @@ function showRouteInfo(
     );
 
   if (pageRouteInfo) {
+
     pageRouteInfo.style.display =
       "block";
 
@@ -2292,7 +2814,9 @@ function showRouteInfo(
 ====================================================== */
 
 async function confirmDestination() {
+
   if (!destinationLocation) {
+
     showMessage(
       "حدد مكان الوصول أولاً.",
       "error"
@@ -2302,6 +2826,7 @@ async function confirmDestination() {
   }
 
   if (!pickupLocation) {
+
     showMessage(
       "حدد مكان الانطلاق أولاً علشان نحسب المسافة.",
       "error"
@@ -2311,6 +2836,7 @@ async function confirmDestination() {
   }
 
   try {
+
     await reverseGeocodeDestination(
       destinationLocation.lat,
       destinationLocation.lng
@@ -2323,6 +2849,7 @@ async function confirmDestination() {
       );
 
     if (!route) {
+
       showMessage(
         "لم نتمكن من حساب مسافة الطريق. حاول مرة أخرى.",
         "error"
@@ -2348,7 +2875,9 @@ async function confirmDestination() {
         savedDestination.durationMinutes
     };
 
-    renderNewTripPage(true);
+    renderNewTripPage(
+      true
+    );
 
     const destinationInput =
       document.getElementById(
@@ -2356,6 +2885,7 @@ async function confirmDestination() {
       );
 
     if (destinationInput) {
+
       destinationInput.value =
         destinationLocation.address ||
         "";
@@ -2372,7 +2902,11 @@ async function confirmDestination() {
     );
 
   } catch (error) {
-    console.error(error);
+
+    console.error(
+      "CONFIRM DESTINATION ERROR:",
+      error
+    );
 
     showMessage(
       "حصل خطأ أثناء تأكيد مكان الوصول.",
@@ -2386,10 +2920,12 @@ async function confirmDestination() {
 ====================================================== */
 
 async function createTrip() {
+
   if (
     !currentUser ||
     !currentProfile
   ) {
+
     showMessage(
       "يجب تسجيل الدخول أولاً.",
       "error"
@@ -2399,6 +2935,7 @@ async function createTrip() {
   }
 
   if (!pickupLocation) {
+
     showMessage(
       "حدد مكان الانطلاق أولاً.",
       "error"
@@ -2408,6 +2945,7 @@ async function createTrip() {
   }
 
   if (!destinationLocation) {
+
     showMessage(
       "حدد مكان الوصول أولاً.",
       "error"
@@ -2440,6 +2978,7 @@ async function createTrip() {
     passengerCount < 1 ||
     passengerCount > 8
   ) {
+
     showMessage(
       "حدد عدد الركاب من 1 إلى 8.",
       "error"
@@ -2452,6 +2991,7 @@ async function createTrip() {
     !proposedPrice ||
     proposedPrice <= 0
   ) {
+
     showMessage(
       "اكتب السعر المقترح.",
       "error"
@@ -2461,13 +3001,16 @@ async function createTrip() {
   }
 
   try {
+
     const button =
       document.getElementById(
         "submitTripBtn"
       );
 
     if (button) {
+
       button.disabled = true;
+
       button.textContent =
         "جاري حساب المسافة...";
     }
@@ -2483,6 +3026,7 @@ async function createTrip() {
         )
       )
     ) {
+
       route =
         await calculateRoadRoute(
           pickupLocation,
@@ -2491,8 +3035,11 @@ async function createTrip() {
     }
 
     if (!route) {
+
       if (button) {
+
         button.disabled = false;
+
         button.textContent =
           "🚕 اطلب الرحلة";
       }
@@ -2506,11 +3053,13 @@ async function createTrip() {
     }
 
     if (button) {
+
       button.textContent =
         "جاري إرسال الرحلة...";
     }
 
     const tripData = {
+
       customerId:
         currentUser.uid,
 
@@ -2521,6 +3070,7 @@ async function createTrip() {
         currentProfile.phone || "",
 
       pickup: {
+
         lat:
           pickupLocation.lat,
 
@@ -2532,6 +3082,7 @@ async function createTrip() {
       },
 
       destination: {
+
         lat:
           destinationLocation.lat,
 
@@ -2558,15 +3109,20 @@ async function createTrip() {
 
       proposedPrice,
 
-      status: "open",
+      status:
+        "open",
 
-      acceptedCaptainId: null,
+      acceptedCaptainId:
+        null,
 
-      acceptedCaptainName: null,
+      acceptedCaptainName:
+        null,
 
-      acceptedCaptainPhone: null,
+      acceptedCaptainPhone:
+        null,
 
-      acceptedAt: null,
+      acceptedAt:
+        null,
 
       createdAt:
         serverTimestamp()
@@ -2587,7 +3143,9 @@ async function createTrip() {
     );
 
     if (button) {
+
       button.disabled = false;
+
       button.textContent =
         "🚕 اطلب الرحلة";
     }
@@ -2682,12 +3240,14 @@ async function createTrip() {
     document.getElementById(
       "backCustomerBtn"
     ).onclick = () => {
+
       renderCustomerHome(
         currentProfile
       );
     };
 
   } catch (error) {
+
     console.error(
       "CREATE TRIP ERROR:",
       error
@@ -2699,7 +3259,9 @@ async function createTrip() {
       );
 
     if (button) {
+
       button.disabled = false;
+
       button.textContent =
         "🚕 اطلب الرحلة";
     }
@@ -2716,11 +3278,13 @@ async function createTrip() {
 ====================================================== */
 
 function renderAvailableTrips() {
+
   if (
     !currentUser ||
     currentProfile?.role !==
       "captain"
   ) {
+
     showMessage(
       "يجب تسجيل الدخول ككابتن أولاً.",
       "error"
@@ -2767,6 +3331,7 @@ function renderAvailableTrips() {
   document.getElementById(
     "backCaptainHomeBtn"
   ).onclick = () => {
+
     renderCaptainHome(
       currentProfile
     );
@@ -2780,6 +3345,7 @@ function renderAvailableTrips() {
 ====================================================== */
 
 function listenForAvailableTrips() {
+
   const list =
     document.getElementById(
       "availableTripsList"
@@ -2788,6 +3354,7 @@ function listenForAvailableTrips() {
   if (!list) return;
 
   try {
+
     const tripsQuery =
       query(
         collection(
@@ -2807,6 +3374,7 @@ function listenForAvailableTrips() {
         (snapshot) => {
 
           if (snapshot.empty) {
+
             list.innerHTML = `
               <div class="empty-state">
 
@@ -2832,16 +3400,19 @@ function listenForAvailableTrips() {
 
           snapshot.forEach(
             (tripDoc) => {
+
               trips.push({
                 id:
                   tripDoc.id,
                 ...tripDoc.data()
               });
+
             }
           );
 
           trips.sort(
             (a, b) => {
+
               const aTime =
                 a.createdAt?.seconds ||
                 0;
@@ -2858,17 +3429,21 @@ function listenForAvailableTrips() {
 
           trips.forEach(
             (trip) => {
+
               list.appendChild(
                 createCaptainTripCard(
                   trip,
                   trip.id
                 )
               );
+
             }
           );
+
         },
 
         (error) => {
+
           console.error(
             "CAPTAIN TRIPS ERROR:",
             error
@@ -2895,6 +3470,7 @@ function listenForAvailableTrips() {
       );
 
   } catch (error) {
+
     console.error(error);
 
     list.innerHTML = `
@@ -2915,6 +3491,7 @@ function createCaptainTripCard(
   trip,
   tripId
 ) {
+
   const card =
     document.createElement(
       "div"
@@ -3074,6 +3651,7 @@ function createCaptainTripCard(
   card.querySelector(
     ".offerTripBtn"
   ).onclick = () => {
+
     openOfferDialog(
       trip,
       tripId
@@ -3083,6 +3661,7 @@ function createCaptainTripCard(
   card.querySelector(
     ".acceptTripBtn"
   ).onclick = () => {
+
     acceptTrip(
       trip,
       tripId
@@ -3100,6 +3679,7 @@ function openOfferDialog(
   trip,
   tripId
 ) {
+
   const old =
     document.getElementById(
       "offerDialog"
@@ -3200,6 +3780,7 @@ function openOfferDialog(
   document.getElementById(
     "cancelOfferBtn"
   ).onclick = () => {
+
     dialog.remove();
   };
 
@@ -3215,6 +3796,7 @@ function openOfferDialog(
       );
 
     if (!value || value <= 0) {
+
       showMessage(
         "اكتب سعر صحيح.",
         "error"
@@ -3242,11 +3824,13 @@ async function sendTripOffer(
   tripId,
   price
 ) {
+
   if (
     !currentUser ||
     currentProfile?.role !==
       "captain"
   ) {
+
     showMessage(
       "يجب تسجيل الدخول ككابتن.",
       "error"
@@ -3256,6 +3840,7 @@ async function sendTripOffer(
   }
 
   try {
+
     const existingQuery =
       query(
         collection(
@@ -3274,22 +3859,33 @@ async function sendTripOffer(
     const existingSnapshot =
       await new Promise(
         (resolve, reject) => {
+
           const unsubscribe =
             onSnapshot(
               existingQuery,
               (snapshot) => {
+
                 unsubscribe();
-                resolve(snapshot);
+
+                resolve(
+                  snapshot
+                );
               },
+
               (error) => {
+
                 unsubscribe();
+
                 reject(error);
               }
             );
         }
       );
 
-    if (!existingSnapshot.empty) {
+    if (
+      !existingSnapshot.empty
+    ) {
+
       showMessage(
         "أنت قدمت عرضًا لهذه الرحلة بالفعل.",
         "error"
@@ -3306,6 +3902,7 @@ async function sendTripOffer(
         "offers"
       ),
       {
+
         captainId:
           currentUser.uid,
 
@@ -3327,7 +3924,8 @@ async function sendTripOffer(
         price:
           Number(price),
 
-        status: "pending",
+        status:
+          "pending",
 
         createdAt:
           serverTimestamp()
@@ -3340,6 +3938,7 @@ async function sendTripOffer(
     );
 
   } catch (error) {
+
     console.error(
       "SEND OFFER ERROR:",
       error
@@ -3360,11 +3959,13 @@ async function acceptTrip(
   trip,
   tripId
 ) {
+
   if (
     !currentUser ||
     currentProfile?.role !==
       "captain"
   ) {
+
     showMessage(
       "يجب تسجيل الدخول ككابتن.",
       "error"
@@ -3383,6 +3984,7 @@ async function acceptTrip(
   if (!confirmed) return;
 
   try {
+
     const tripRef =
       doc(
         db,
@@ -3396,6 +3998,7 @@ async function acceptTrip(
       );
 
     if (!freshTrip.exists()) {
+
       showMessage(
         "الرحلة غير موجودة.",
         "error"
@@ -3411,6 +4014,7 @@ async function acceptTrip(
       currentTrip.status !==
       "open"
     ) {
+
       showMessage(
         "الرحلة تم قبولها بالفعل أو لم تعد متاحة.",
         "error"
@@ -3422,7 +4026,9 @@ async function acceptTrip(
     await updateDoc(
       tripRef,
       {
-        status: "accepted",
+
+        status:
+          "accepted",
 
         acceptedCaptainId:
           currentUser.uid,
@@ -3460,6 +4066,7 @@ async function acceptTrip(
     renderCaptainTrips();
 
   } catch (error) {
+
     console.error(
       "ACCEPT TRIP ERROR:",
       error
@@ -3477,11 +4084,13 @@ async function acceptTrip(
 ====================================================== */
 
 function renderCustomerTrips() {
+
   if (
     !currentUser ||
     currentProfile?.role !==
       "customer"
   ) {
+
     showMessage(
       "يجب تسجيل الدخول كعميل.",
       "error"
@@ -3528,6 +4137,7 @@ function renderCustomerTrips() {
   document.getElementById(
     "backBtn"
   ).onclick = () => {
+
     renderCustomerHome(
       currentProfile
     );
@@ -3541,6 +4151,7 @@ function renderCustomerTrips() {
 ====================================================== */
 
 function listenForCustomerTrips() {
+
   const list =
     document.getElementById(
       "customerTripsList"
@@ -3567,6 +4178,7 @@ function listenForCustomerTrips() {
       (snapshot) => {
 
         if (snapshot.empty) {
+
           list.innerHTML = `
             <div class="empty-state">
 
@@ -3592,16 +4204,19 @@ function listenForCustomerTrips() {
 
         snapshot.forEach(
           (tripDoc) => {
+
             trips.push({
               id:
                 tripDoc.id,
               ...tripDoc.data()
             });
+
           }
         );
 
         trips.sort(
           (a, b) => {
+
             const aTime =
               a.createdAt?.seconds ||
               0;
@@ -3618,17 +4233,20 @@ function listenForCustomerTrips() {
 
         trips.forEach(
           (trip) => {
+
             list.appendChild(
               createCustomerTripCard(
                 trip,
                 trip.id
               )
             );
+
           }
         );
       },
 
       (error) => {
+
         console.error(
           "CUSTOMER TRIPS ERROR:",
           error
@@ -3663,6 +4281,7 @@ function createCustomerTripCard(
   trip,
   tripId
 ) {
+
   const card =
     document.createElement(
       "div"
@@ -3678,6 +4297,7 @@ function createCustomerTripCard(
     trip.status ===
     "accepted"
   ) {
+
     statusText =
       "تم قبولها";
   }
@@ -3686,6 +4306,7 @@ function createCustomerTripCard(
     trip.status ===
     "completed"
   ) {
+
     statusText =
       "مكتملة";
   }
@@ -3891,8 +4512,10 @@ function createCustomerTripCard(
     );
 
   if (offersButton) {
+
     offersButton.onclick =
       () => {
+
         renderTripOffers(
           trip,
           tripId
@@ -3911,6 +4534,7 @@ function renderTripOffers(
   trip,
   tripId
 ) {
+
   stopAllListeners();
 
   appRoot().innerHTML = `
@@ -3971,6 +4595,7 @@ function listenForTripOffers(
   trip,
   tripId
 ) {
+
   const list =
     document.getElementById(
       "offersList"
@@ -3999,6 +4624,7 @@ function listenForTripOffers(
       (snapshot) => {
 
         if (snapshot.empty) {
+
           list.innerHTML = `
             <div class="empty-state">
 
@@ -4024,16 +4650,19 @@ function listenForTripOffers(
 
         snapshot.forEach(
           (offerDoc) => {
+
             offers.push({
               id:
                 offerDoc.id,
               ...offerDoc.data()
             });
+
           }
         );
 
         offers.sort(
           (a, b) => {
+
             const aTime =
               a.createdAt?.seconds ||
               0;
@@ -4145,6 +4774,7 @@ function listenForTripOffers(
             card.querySelector(
               ".acceptOfferBtn"
             ).onclick = () => {
+
               acceptCaptainOffer(
                 trip,
                 tripId,
@@ -4160,6 +4790,7 @@ function listenForTripOffers(
       },
 
       (error) => {
+
         console.error(
           "OFFERS ERROR:",
           error
@@ -4195,11 +4826,13 @@ async function acceptCaptainOffer(
   tripId,
   offer
 ) {
+
   if (
     !currentUser ||
     currentProfile?.role !==
       "customer"
   ) {
+
     showMessage(
       "يجب تسجيل الدخول كعميل.",
       "error"
@@ -4220,6 +4853,7 @@ async function acceptCaptainOffer(
   if (!confirmed) return;
 
   try {
+
     const tripRef =
       doc(
         db,
@@ -4233,6 +4867,7 @@ async function acceptCaptainOffer(
       );
 
     if (!freshTrip.exists()) {
+
       showMessage(
         "الرحلة غير موجودة.",
         "error"
@@ -4248,6 +4883,7 @@ async function acceptCaptainOffer(
       currentTrip.status !==
       "open"
     ) {
+
       showMessage(
         "الرحلة لم تعد مفتوحة.",
         "error"
@@ -4259,7 +4895,9 @@ async function acceptCaptainOffer(
     await updateDoc(
       tripRef,
       {
-        status: "accepted",
+
+        status:
+          "accepted",
 
         acceptedCaptainId:
           offer.captainId,
@@ -4298,7 +4936,8 @@ async function acceptCaptainOffer(
         offer.id
       ),
       {
-        status: "accepted"
+        status:
+          "accepted"
       }
     );
 
@@ -4310,6 +4949,7 @@ async function acceptCaptainOffer(
     renderCustomerTrips();
 
   } catch (error) {
+
     console.error(
       "ACCEPT OFFER ERROR:",
       error
@@ -4327,11 +4967,13 @@ async function acceptCaptainOffer(
 ====================================================== */
 
 function renderCaptainTrips() {
+
   if (
     !currentUser ||
     currentProfile?.role !==
       "captain"
   ) {
+
     showMessage(
       "يجب تسجيل الدخول ككابتن.",
       "error"
@@ -4378,6 +5020,7 @@ function renderCaptainTrips() {
   document.getElementById(
     "backBtn"
   ).onclick = () => {
+
     renderCaptainHome(
       currentProfile
     );
@@ -4391,6 +5034,7 @@ function renderCaptainTrips() {
 ====================================================== */
 
 function listenForCaptainTrips() {
+
   const list =
     document.getElementById(
       "captainTripsList"
@@ -4417,6 +5061,7 @@ function listenForCaptainTrips() {
       (snapshot) => {
 
         if (snapshot.empty) {
+
           list.innerHTML = `
             <div class="empty-state">
 
@@ -4442,16 +5087,19 @@ function listenForCaptainTrips() {
 
         snapshot.forEach(
           (tripDoc) => {
+
             trips.push({
               id:
                 tripDoc.id,
               ...tripDoc.data()
             });
+
           }
         );
 
         trips.sort(
           (a, b) => {
+
             const aTime =
               a.acceptedAt?.seconds ||
               a.createdAt?.seconds ||
@@ -4622,6 +5270,7 @@ function listenForCaptainTrips() {
       },
 
       (error) => {
+
         console.error(
           "CAPTAIN HISTORY ERROR:",
           error
@@ -4659,6 +5308,7 @@ if (firebaseReady) {
     async (user) => {
 
       if (!user) {
+
         currentUser = null;
         currentProfile = null;
 
@@ -4668,6 +5318,7 @@ if (firebaseReady) {
       }
 
       try {
+
         currentUser = user;
 
         const profileSnap =
