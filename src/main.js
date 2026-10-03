@@ -22,12 +22,12 @@ import {
   setDoc,
   getDoc,
   addDoc,
+  updateDoc,
   collection,
   serverTimestamp,
   query,
   where,
-  onSnapshot,
-  orderBy
+  onSnapshot
 } from "firebase/firestore";
 
 /* ======================================================
@@ -45,9 +45,9 @@ const firebaseConfig = {
 };
 
 let firebaseReady = false;
-let app;
-let auth;
-let db;
+let app = null;
+let auth = null;
+let db = null;
 
 try {
   app = initializeApp(firebaseConfig);
@@ -76,7 +76,8 @@ let destinationMarker = null;
 
 let selectedRoute = null;
 
-let stopCaptainTripsListener = null;
+let stopTripsListener = null;
+let stopMyTripsListener = null;
 
 /* ======================================================
    HELPERS
@@ -94,11 +95,9 @@ function showMessage(message, type = "info") {
     return;
   }
 
-  const old = document.querySelector(".app-message");
-
-  if (old) {
-    old.remove();
-  }
+  document
+    .querySelectorAll(".app-message")
+    .forEach((item) => item.remove());
 
   const box = document.createElement("div");
 
@@ -117,16 +116,23 @@ function showMessage(message, type = "info") {
 function loading(text = "جاري التحميل...") {
   const root = appRoot();
 
-  if (!root) {
-    return;
-  }
+  if (!root) return;
 
   root.innerHTML = `
     <div class="loading-screen">
       <div class="loader"></div>
-      <p>${text}</p>
+      <p>${escapeHtml(text)}</p>
     </div>
   `;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function normalizeEgyptPhone(phone) {
@@ -166,11 +172,7 @@ function createInternalLoginEmail(phone, role) {
 function firebaseErrorMessage(error) {
   const code = error?.code || "unknown";
 
-  console.error(
-    "Firebase error code:",
-    code,
-    error
-  );
+  console.error("Firebase error:", code, error);
 
   const messages = {
     "auth/invalid-credential":
@@ -207,7 +209,10 @@ function firebaseErrorMessage(error) {
       "يوجد إعداد ناقص في Firebase.",
 
     "unavailable":
-      "Firebase غير متاح حاليًا. تأكد من الإنترنت وحاول مرة أخرى."
+      "Firebase غير متاح حاليًا. تأكد من الإنترنت وحاول مرة أخرى.",
+
+    "not-found":
+      "البيانات المطلوبة غير موجودة."
   };
 
   return (
@@ -219,7 +224,7 @@ function firebaseErrorMessage(error) {
 function checkFirebase() {
   if (!firebaseReady || !auth || !db) {
     showMessage(
-      "تعذر تشغيل Firebase. تأكد من إعدادات Firebase في GitHub Secrets ثم أعد بناء التطبيق.",
+      "تعذر تشغيل Firebase. تأكد من إعدادات Firebase ثم أعد بناء التطبيق.",
       "error"
     );
 
@@ -227,15 +232,6 @@ function checkFirebase() {
   }
 
   return true;
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 }
 
 function formatDistance(km) {
@@ -273,16 +269,46 @@ function formatDuration(minutes) {
   return `${hours} ساعة و ${mins} دقيقة`;
 }
 
+function formatDate(timestamp) {
+  if (!timestamp) return "";
+
+  try {
+    const date =
+      timestamp.toDate
+        ? timestamp.toDate()
+        : new Date(timestamp);
+
+    return date.toLocaleString("ar-EG", {
+      dateStyle: "short",
+      timeStyle: "short"
+    });
+  } catch {
+    return "";
+  }
+}
+
+function stopAllListeners() {
+  if (stopTripsListener) {
+    stopTripsListener();
+    stopTripsListener = null;
+  }
+
+  if (stopMyTripsListener) {
+    stopMyTripsListener();
+    stopMyTripsListener = null;
+  }
+}
+
 /* ======================================================
    HOME
 ====================================================== */
 
 function renderHome() {
+  stopAllListeners();
+
   const root = appRoot();
 
-  if (!root) {
-    return;
-  }
+  if (!root) return;
 
   root.innerHTML = `
     <div class="page-container">
@@ -355,9 +381,7 @@ function renderAuth(
 
   const root = appRoot();
 
-  if (!root) {
-    return;
-  }
+  if (!root) return;
 
   root.innerHTML = `
     <div class="page-container">
@@ -581,9 +605,7 @@ function renderAuth(
 ====================================================== */
 
 async function registerAccount() {
-  if (!checkFirebase()) {
-    return;
-  }
+  if (!checkFirebase()) return;
 
   const phone =
     normalizeEgyptPhone(
@@ -665,6 +687,26 @@ async function registerAccount() {
         document.getElementById(
           "carNumberInput"
         )?.value.trim() || "";
+
+      if (
+        !profile.carType ||
+        !profile.carModel ||
+        !profile.carNumber
+      ) {
+        await signOut(auth);
+
+        renderAuth(
+          "captain",
+          "register"
+        );
+
+        showMessage(
+          "اكتب نوع السيارة والموديل ورقم السيارة.",
+          "error"
+        );
+
+        return;
+      }
     }
 
     await setDoc(
@@ -677,16 +719,23 @@ async function registerAccount() {
     );
 
     currentUser = result.user;
-    currentProfile = profile;
+    currentProfile = {
+      ...profile,
+      createdAt: null
+    };
 
     if (selectedRole === "captain") {
-      renderCaptainHome(profile);
+      renderCaptainHome(
+        currentProfile
+      );
     } else {
-      renderCustomerHome(profile);
+      renderCustomerHome(
+        currentProfile
+      );
     }
 
     showMessage(
-      "تم إنشاء الحساب بنجاح.",
+      "تم إنشاء الحساب بنجاح ✅",
       "success"
     );
   } catch (error) {
@@ -712,9 +761,7 @@ async function registerAccount() {
 ====================================================== */
 
 async function loginAccount() {
-  if (!checkFirebase()) {
-    return;
-  }
+  if (!checkFirebase()) return;
 
   const phone =
     normalizeEgyptPhone(
@@ -728,7 +775,8 @@ async function loginAccount() {
       "passwordInput"
     )?.value || "";
 
-  const roleAtLogin = selectedRole;
+  const roleAtLogin =
+    selectedRole;
 
   if (!isValidEgyptPhone(phone)) {
     showMessage(
@@ -778,32 +826,26 @@ async function loginAccount() {
       );
 
     if (!profileSnap.exists()) {
-      currentProfile = {
-        uid: result.user.uid,
-        phone,
-        name: "",
-        role: roleAtLogin
-      };
+      await signOut(auth);
 
-      await setDoc(
-        doc(
-          db,
-          "users",
-          result.user.uid
-        ),
-        {
-          ...currentProfile,
-          createdAt:
-            serverTimestamp()
-        },
-        {
-          merge: true
-        }
+      currentUser = null;
+      currentProfile = null;
+
+      renderAuth(
+        roleAtLogin,
+        "login"
       );
-    } else {
-      currentProfile =
-        profileSnap.data();
+
+      showMessage(
+        "بيانات الحساب غير موجودة.",
+        "error"
+      );
+
+      return;
     }
+
+    currentProfile =
+      profileSnap.data();
 
     if (
       currentProfile.role &&
@@ -820,7 +862,7 @@ async function loginAccount() {
       );
 
       showMessage(
-        "هذا الحساب مسجل بنوع مختلف. اختار عميل أو كابتن الصحيح.",
+        "هذا الحساب مسجل بنوع مختلف.",
         "error"
       );
 
@@ -838,9 +880,7 @@ async function loginAccount() {
     }
 
     showMessage(
-      roleAtLogin === "captain"
-        ? "تم تسجيل الدخول ككابتن بنجاح."
-        : "تم تسجيل الدخول كعميل بنجاح.",
+      "تم تسجيل الدخول بنجاح ✅",
       "success"
     );
   } catch (error) {
@@ -866,9 +906,13 @@ async function loginAccount() {
 ====================================================== */
 
 function renderCustomerHome(profile) {
-  stopCaptainTripsListener?.();
+  stopAllListeners();
 
-  appRoot().innerHTML = `
+  const root = appRoot();
+
+  if (!root) return;
+
+  root.innerHTML = `
     <div class="page-container">
 
       <div class="dashboard">
@@ -876,9 +920,11 @@ function renderCustomerHome(profile) {
         <div class="dashboard-header">
 
           <h2>
-            أهلاً ${escapeHtml(
-              profile.name || "بك"
-            )} 👋
+            أهلاً ${
+              escapeHtml(
+                profile?.name || "بك"
+              )
+            } 👋
           </h2>
 
           <p>
@@ -923,41 +969,78 @@ function renderCustomerHome(profile) {
 
   document.getElementById(
     "myTripsBtn"
-  ).onclick = () => {
-    showMessage(
-      "قسم رحلاتي هنضيفه بعد شاشة الرحلات المتاحة.",
-      "info"
-    );
-  };
+  ).onclick =
+    renderCustomerTrips;
 
   document.getElementById(
     "accountBtn"
-  ).onclick = () => {
-    showMessage(
-      `رقم الهاتف: ${
-        profile.phone || "-"
-      }`,
-      "info"
-    );
-  };
+  ).onclick =
+    renderCustomerAccount;
 
   document.getElementById(
     "logoutBtn"
   ).onclick =
-    async () => {
-      try {
-        await signOut(auth);
-      } catch (error) {
-        console.error(error);
-      }
+    logoutUser;
+}
 
-      currentUser = null;
-      currentProfile = null;
-      pickupLocation = null;
-      destinationLocation = null;
+/* ======================================================
+   CUSTOMER ACCOUNT
+====================================================== */
 
-      renderHome();
-    };
+function renderCustomerAccount() {
+  const profile =
+    currentProfile || {};
+
+  appRoot().innerHTML = `
+    <div class="page-container">
+
+      <button
+        id="backBtn"
+        class="back-btn">
+        ← رجوع
+      </button>
+
+      <div class="dashboard">
+
+        <div class="dashboard-header">
+          <h2>👤 حسابي</h2>
+        </div>
+
+        <div class="profile-box">
+
+          <p>
+            <strong>الاسم:</strong>
+            ${escapeHtml(
+              profile.name || "-"
+            )}
+          </p>
+
+          <p>
+            <strong>رقم الهاتف:</strong>
+            ${escapeHtml(
+              profile.phone || "-"
+            )}
+          </p>
+
+          <p>
+            <strong>نوع الحساب:</strong>
+            عميل
+          </p>
+
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById(
+    "backBtn"
+  ).onclick = () => {
+    renderCustomerHome(
+      currentProfile
+    );
+  };
 }
 
 /* ======================================================
@@ -965,9 +1048,13 @@ function renderCustomerHome(profile) {
 ====================================================== */
 
 function renderCaptainHome(profile) {
-  stopCaptainTripsListener?.();
+  stopAllListeners();
 
-  appRoot().innerHTML = `
+  const root = appRoot();
+
+  if (!root) return;
+
+  root.innerHTML = `
     <div class="page-container">
 
       <div class="dashboard">
@@ -975,9 +1062,11 @@ function renderCaptainHome(profile) {
         <div class="dashboard-header">
 
           <h2>
-            أهلاً ${escapeHtml(
-              profile.name || "كابتن"
-            )} 🚕
+            أهلاً ${
+              escapeHtml(
+                profile?.name || "كابتن"
+              )
+            } 🚕
           </h2>
 
           <p>
@@ -1003,21 +1092,21 @@ function renderCaptainHome(profile) {
           <p>
             <strong>نوع السيارة:</strong>
             ${escapeHtml(
-              profile.carType || "-"
+              profile?.carType || "-"
             )}
           </p>
 
           <p>
             <strong>الموديل:</strong>
             ${escapeHtml(
-              profile.carModel || "-"
+              profile?.carModel || "-"
             )}
           </p>
 
           <p>
             <strong>رقم السيارة:</strong>
             ${escapeHtml(
-              profile.carNumber || "-"
+              profile?.carNumber || "-"
             )}
           </p>
 
@@ -1041,400 +1130,45 @@ function renderCaptainHome(profile) {
 
   document.getElementById(
     "captainTripsBtn"
-  ).onclick = () => {
-    showMessage(
-      "قسم رحلات الكابتن هنضيفه بعد ربط قبول الرحلات.",
-      "info"
-    );
-  };
+  ).onclick =
+    renderCaptainTrips;
 
   document.getElementById(
     "logoutBtn"
   ).onclick =
-    async () => {
-      try {
-        await signOut(auth);
-      } catch (error) {
-        console.error(error);
-      }
-
-      currentUser = null;
-      currentProfile = null;
-
-      stopCaptainTripsListener?.();
-
-      renderHome();
-    };
+    logoutUser;
 }
 
 /* ======================================================
-   AVAILABLE TRIPS
+   LOGOUT
 ====================================================== */
 
-function renderAvailableTrips() {
-  if (!currentUser) {
-    showMessage(
-      "يجب تسجيل الدخول ككابتن أولاً.",
-      "error"
-    );
-    return;
-  }
-
-  stopCaptainTripsListener?.();
-
-  appRoot().innerHTML = `
-    <div class="page-container">
-
-      <button
-        id="backCaptainHomeBtn"
-        class="back-btn">
-        ← رجوع
-      </button>
-
-      <div class="dashboard">
-
-        <div class="dashboard-header">
-
-          <h2>
-            🚕 الرحلات المتاحة
-          </h2>
-
-          <p>
-            الرحلات الجديدة تظهر هنا تلقائيًا
-          </p>
-
-        </div>
-
-        <div id="availableTripsList">
-
-          <div class="loading-screen">
-            <div class="loader"></div>
-            <p>جاري تحميل الرحلات...</p>
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-  `;
-
-  document.getElementById(
-    "backCaptainHomeBtn"
-  ).onclick = () => {
-    renderCaptainHome(
-      currentProfile
-    );
-  };
-
-  listenForAvailableTrips();
-}
-
-/* ======================================================
-   LISTEN FOR OPEN TRIPS
-====================================================== */
-
-function listenForAvailableTrips() {
-  const list =
-    document.getElementById(
-      "availableTripsList"
-    );
-
-  if (!list) {
-    return;
-  }
+async function logoutUser() {
+  stopAllListeners();
 
   try {
-    const tripsQuery =
-      query(
-        collection(
-          db,
-          "trips"
-        ),
-        where(
-          "status",
-          "==",
-          "open"
-        ),
-        orderBy(
-          "createdAt",
-          "desc"
-        )
-      );
-
-    stopCaptainTripsListener =
-      onSnapshot(
-        tripsQuery,
-
-        (snapshot) => {
-          if (snapshot.empty) {
-            list.innerHTML = `
-              <div class="empty-state">
-
-                <div class="empty-icon">
-                  🚕
-                </div>
-
-                <h3>
-                  لا توجد رحلات متاحة الآن
-                </h3>
-
-                <p>
-                  عندما يطلب عميل رحلة ستظهر هنا تلقائيًا.
-                </p>
-
-              </div>
-            `;
-
-            return;
-          }
-
-          list.innerHTML = "";
-
-          snapshot.forEach(
-            (tripDoc) => {
-              const trip =
-                tripDoc.data();
-
-              const tripId =
-                tripDoc.id;
-
-              list.appendChild(
-                createCaptainTripCard(
-                  trip,
-                  tripId
-                )
-              );
-            }
-          );
-        },
-
-        (error) => {
-          console.error(
-            "CAPTAIN TRIPS ERROR:",
-            error
-          );
-
-          list.innerHTML = `
-            <div class="empty-state">
-
-              <h3>
-                حصل خطأ في تحميل الرحلات
-              </h3>
-
-              <p>
-                ${escapeHtml(
-                  firebaseErrorMessage(
-                    error
-                  )
-                )}
-              </p>
-
-            </div>
-          `;
-        }
-      );
+    if (auth) {
+      await signOut(auth);
+    }
   } catch (error) {
-    console.error(error);
-
-    list.innerHTML = `
-      <div class="empty-state">
-
-        <h3>
-          تعذر تحميل الرحلات
-        </h3>
-
-        <p>
-          ${escapeHtml(
-            firebaseErrorMessage(
-              error
-            )
-          )}
-        </p>
-
-      </div>
-    `;
+    console.error(
+      "LOGOUT ERROR:",
+      error
+    );
   }
+
+  currentUser = null;
+  currentProfile = null;
+
+  pickupLocation = null;
+  destinationLocation = null;
+  selectedRoute = null;
+
+  destroyMap();
+
+  renderHome();
 }
 
-/* ======================================================
-   CAPTAIN TRIP CARD
-====================================================== */
-
-function createCaptainTripCard(
-  trip,
-  tripId
-) {
-  const card =
-    document.createElement(
-      "div"
-    );
-
-  card.className =
-    "captain-trip-card trip-card";
-
-  const pickupAddress =
-    trip.pickup?.address ||
-    "موقع الانطلاق غير محدد";
-
-  const destinationAddress =
-    trip.destination?.address ||
-    "مكان الوصول غير محدد";
-
-  const passengerCount =
-    trip.passengerCount || 1;
-
-  const notes =
-    trip.notes ||
-    "لا توجد ملاحظات";
-
-  const price =
-    trip.proposedPrice || 0;
-
-  const customerName =
-    trip.customerName ||
-    "عميل";
-
-  const customerPhone =
-    trip.customerPhone ||
-    "";
-
-  const distanceText =
-    trip.distanceKm
-      ? formatDistance(
-          trip.distanceKm
-        )
-      : "غير محسوبة";
-
-  const durationText =
-    trip.durationMinutes
-      ? formatDuration(
-          trip.durationMinutes
-        )
-      : "غير محسوبة";
-
-  card.innerHTML = `
-    <div class="trip-card-header">
-
-      <h3>
-        🚕 رحلة جديدة
-      </h3>
-
-      <span class="trip-status">
-        مفتوحة
-      </span>
-
-    </div>
-
-    <div class="trip-info">
-
-      <div class="trip-info-row">
-        <strong>👤 العميل</strong>
-        <span>
-          ${escapeHtml(customerName)}
-        </span>
-      </div>
-
-      <div class="trip-info-row">
-        <strong>📍 الانطلاق</strong>
-        <span>
-          ${escapeHtml(pickupAddress)}
-        </span>
-      </div>
-
-      <div class="trip-info-row">
-        <strong>🏁 الوصول</strong>
-        <span>
-          ${escapeHtml(destinationAddress)}
-        </span>
-      </div>
-
-      <div class="trip-info-row">
-        <strong>📏 المسافة</strong>
-        <span>
-          ${distanceText}
-        </span>
-      </div>
-
-      <div class="trip-info-row">
-        <strong>⏱️ المدة</strong>
-        <span>
-          ${durationText}
-        </span>
-      </div>
-
-      <div class="trip-info-row">
-        <strong>👥 الركاب</strong>
-        <span>
-          ${passengerCount}
-        </span>
-      </div>
-
-      <div class="trip-info-row">
-        <strong>📝 الملاحظات</strong>
-        <span>
-          ${escapeHtml(notes)}
-        </span>
-      </div>
-
-      <div class="trip-price">
-        💰 السعر المقترح:
-        <strong>
-          ${price} جنيه
-        </strong>
-      </div>
-
-    </div>
-
-    <div class="trip-actions">
-
-      ${
-        customerPhone
-          ? `
-            <a
-              class="primary-btn"
-              href="tel:${escapeHtml(
-                customerPhone
-              )}">
-              📞 اتصال بالعميل
-            </a>
-          `
-          : ""
-      }
-
-      <button
-        class="secondary-btn offerTripBtn">
-        💰 تقديم عرض سعر
-      </button>
-
-      <button
-        class="primary-btn acceptTripBtn">
-        ✅ قبول الرحلة
-      </button>
-
-    </div>
-  `;
-
-  card.querySelector(
-    ".offerTripBtn"
-  ).onclick = () => {
-    showMessage(
-      "هنضيف نظام عروض الأسعار في الخطوة التالية.",
-      "info"
-    );
-  };
-
-  card.querySelector(
-    ".acceptTripBtn"
-  ).onclick = () => {
-    showMessage(
-      "هنربط قبول الرحلة بالكابتن في الخطوة التالية.",
-      "info"
-    );
-  };
-
-  return card;
-}
 /* ======================================================
    NEW TRIP
 ====================================================== */
@@ -1648,175 +1382,84 @@ function renderNewTripPage(
 }
 
 /* ======================================================
-   LOCATION
+   GET CURRENT LOCATION
 ====================================================== */
 
-coords.latitude;
-
-        const lng =
-          position.coords.longitude;
-
-        pickupLocation = {
-          lat,
-          lng,
-          address:
-            `موقع العميل (${lat.toFixed(
-              6
-            )}, ${lng.toFixed(
-              6
-            )})`
-        };
-
-        const input =
-          document.getElementById(
-            "pickupAddress"
-          );
-
-        if (input) {
-          input.value =
-            "📍 تم تحديد موقعي الحالي";
-        }
-
-        showMessage(
-          "تم تحديد موقع الانطلاق بنجاح ✅",
-          "success"
-        );
-
-        if (destinationLocation) {
-          await calculateRoadRoute(
-            pickupLocation,
-            destinationLocation
-          );
-        }
-
-        return;
-      } catch (nativeError) {
-        console.error(
-          "NATIVE LOCATION ERROR:",
-          nativeError
-        );
-
-        const text =
-          String(
-            nativeError?.code ||
-            nativeError?.message ||
-            ""
-          ).toLowerCase();
-
-        if (
-          text.includes("permission") ||
-          text.includes("denied")
-        ) {
-          showMessage(
-            "لم يتم السماح للتطبيق باستخدام الموقع. اسمح بإذن الموقع من أذونات التطبيق ثم حاول مرة أخرى.",
-            "error"
-          );
-
-          return;
-        }
-
-        if (
-          text.includes("timeout")
-        ) {
-          showMessage(
-            "انتهى وقت تحديد الموقع. شغّل GPS وحاول مرة أخرى.",
-            "error"
-          );
-
-          return;
-        }
-
-        showMessage(
-          "تعذر تحديد موقعك. تأكد من تشغيل GPS وحاول مرة أخرى.",
-          "error"
-        );
-
-        return;
-      }
-    }
-
-    if (!navigator.geolocation) {
-      showMessage(
-        "الموقع غير مدعوم على هذا الجهاز.",
-        "error"
-      );
-
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lat =
-          position.coords.latitude;
-
-        const lng =
-          position.coords.longitude;
-
-        pickupLocation = {
-          lat,
-          lng,
-          address:
 async function getPickupLocation() {
   try {
-    // ==========================================
-    // Android / Capacitor
-    // ==========================================
+    showMessage(
+      "📍 جاري تحديد موقعك...",
+      "info"
+    );
+
+    /* ==========================================
+       ANDROID / CAPACITOR
+    ========================================== */
+
     if (Capacitor.isNativePlatform()) {
 
-      // أول ما المستخدم يضغط "موقعي"
-      // نطلب إذن الموقع من أندرويد مباشرة
       let permissions =
         await Geolocation.checkPermissions();
 
-      if (permissions.location !== "granted") {
+      if (
+        permissions.location !==
+        "granted"
+      ) {
         permissions =
           await Geolocation.requestPermissions();
       }
 
-      // لو المستخدم رفض الإذن
-      if (permissions.location !== "granted") {
+      if (
+        permissions.location !==
+        "granted"
+      ) {
         showMessage(
-          "لم يتم السماح باستخدام موقعك. يمكنك السماح بالموقع من إعدادات التطبيق.",
+          "لم يتم السماح للتطبيق باستخدام الموقع. افتح أذونات التطبيق واسمح بالموقع.",
           "error"
         );
 
         return;
       }
 
-      // ==========================================
-      // الحصول على الموقع الحالي
-      // ==========================================
-      showMessage(
-        "📍 جاري تحديد موقعك...",
-        "info"
-      );
-
       const position =
-        await Geolocation.getCurrentPosition({
-          enableHighAccuracy: true,
-          timeout: 20000,
-          maximumAge: 0
-        });
+        await Geolocation.getCurrentPosition(
+          {
+            enableHighAccuracy: true,
+            timeout: 30000,
+            maximumAge: 0
+          }
+        );
 
       const lat =
-        position.coords.latitude;
+        Number(
+          position.coords.latitude
+        );
 
       const lng =
-        position.coords.longitude;
+        Number(
+          position.coords.longitude
+        );
 
-      // ==========================================
-      // حفظ موقع الانطلاق
-      // ==========================================
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng)
+      ) {
+        throw new Error(
+          "INVALID_LOCATION"
+        );
+      }
+
       pickupLocation = {
         lat,
         lng,
         address:
-          `موقع العميل (${lat.toFixed(6)}, ${lng.toFixed(6)})`
+          `موقع العميل (${lat.toFixed(
+            6
+          )}, ${lng.toFixed(
+            6
+          )})`
       };
 
-      // ==========================================
-      // تحديث خانة مكان الانطلاق
-      // ==========================================
       const input =
         document.getElementById(
           "pickupAddress"
@@ -1827,9 +1470,6 @@ async function getPickupLocation() {
           "📍 تم تحديد موقعي الحالي";
       }
 
-      // ==========================================
-      // حساب الطريق لو الوجهة موجودة
-      // ==========================================
       if (destinationLocation) {
         await calculateRoadRoute(
           pickupLocation,
@@ -1845,9 +1485,10 @@ async function getPickupLocation() {
       return;
     }
 
-    // ==========================================
-    // Browser fallback
-    // ==========================================
+    /* ==========================================
+       BROWSER
+    ========================================== */
+
     if (!navigator.geolocation) {
       showMessage(
         "الموقع غير مدعوم على هذا الجهاز.",
@@ -1859,18 +1500,25 @@ async function getPickupLocation() {
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-
         const lat =
-          position.coords.latitude;
+          Number(
+            position.coords.latitude
+          );
 
         const lng =
-          position.coords.longitude;
+          Number(
+            position.coords.longitude
+          );
 
         pickupLocation = {
           lat,
           lng,
           address:
-            `موقع العميل (${lat.toFixed(6)}, ${lng.toFixed(6)})`
+            `موقع العميل (${lat.toFixed(
+              6
+            )}, ${lng.toFixed(
+              6
+            )})`
         };
 
         const input =
@@ -1907,12 +1555,16 @@ async function getPickupLocation() {
             "لم يتم السماح باستخدام الموقع.",
             "error"
           );
-        } else if (error.code === 2) {
+        } else if (
+          error.code === 2
+        ) {
           showMessage(
             "تعذر تحديد موقعك. شغّل GPS وحاول مرة أخرى.",
             "error"
           );
-        } else if (error.code === 3) {
+        } else if (
+          error.code === 3
+        ) {
           showMessage(
             "انتهى وقت تحديد الموقع. حاول مرة أخرى.",
             "error"
@@ -1927,19 +1579,17 @@ async function getPickupLocation() {
 
       {
         enableHighAccuracy: true,
-        timeout: 20000,
+        timeout: 30000,
         maximumAge: 0
       }
     );
-
   } catch (error) {
-
     console.error(
       "GET LOCATION ERROR:",
       error
     );
 
-    const errorText =
+    const text =
       String(
         error?.message ||
         error?.code ||
@@ -1947,11 +1597,11 @@ async function getPickupLocation() {
       ).toLowerCase();
 
     if (
-      errorText.includes("permission") ||
-      errorText.includes("denied")
+      text.includes("permission") ||
+      text.includes("denied")
     ) {
       showMessage(
-        "لم يتم السماح باستخدام الموقع.",
+        "لم يتم السماح باستخدام الموقع. اسمح بإذن الموقع من إعدادات التطبيق.",
         "error"
       );
 
@@ -1959,7 +1609,7 @@ async function getPickupLocation() {
     }
 
     if (
-      errorText.includes("timeout")
+      text.includes("timeout")
     ) {
       showMessage(
         "انتهى وقت تحديد الموقع. شغّل GPS وحاول مرة أخرى.",
@@ -1974,7 +1624,8 @@ async function getPickupLocation() {
       "error"
     );
   }
-} 
+}
+
 /* ======================================================
    DESTINATION MAP
 ====================================================== */
@@ -2003,8 +1654,7 @@ function openDestinationMap() {
 
       <div id="destinationMap"></div>
 
-      <div
-        class="map-bottom-panel">
+      <div class="map-bottom-panel">
 
         <div id="selectedPlace">
           حرّك الخريطة وحدد مكان الوصول
@@ -2065,7 +1715,7 @@ function openDestinationMap() {
 
   setTimeout(
     initializeDestinationMap,
-    100
+    150
   );
 }
 
@@ -2078,7 +1728,10 @@ function destroyMap() {
     try {
       tripMap.remove();
     } catch (error) {
-      console.log(error);
+      console.log(
+        "MAP DESTROY ERROR:",
+        error
+      );
     }
   }
 
@@ -2092,6 +1745,13 @@ function destroyMap() {
 ====================================================== */
 
 function initializeDestinationMap() {
+  const mapElement =
+    document.getElementById(
+      "destinationMap"
+    );
+
+  if (!mapElement) return;
+
   let center = [
     30.5526,
     31.0106
@@ -2110,7 +1770,7 @@ function initializeDestinationMap() {
 
   tripMap =
     L.map(
-      "destinationMap",
+      mapElement,
       {
         zoomControl: true,
         attributionControl: true
@@ -2124,7 +1784,6 @@ function initializeDestinationMap() {
     "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     {
       maxZoom: 19,
-
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>'
     }
@@ -2146,10 +1805,7 @@ function initializeDestinationMap() {
 
   destinationMarker =
     L.marker(
-      center,
-      {
-        draggable: false
-      }
+      center
     )
       .addTo(tripMap)
       .bindPopup(
@@ -2166,7 +1822,8 @@ function initializeDestinationMap() {
     async (event) => {
       await selectMapLocation(
         event.latlng.lat,
-        event.latlng.lng
+        event.latlng.lng,
+        true
       );
     }
   );
@@ -2179,9 +1836,7 @@ function initializeDestinationMap() {
 ====================================================== */
 
 async function updateMapCenter() {
-  if (!tripMap) {
-    return;
-  }
+  if (!tripMap) return;
 
   const center =
     tripMap.getCenter();
@@ -2189,7 +1844,7 @@ async function updateMapCenter() {
   await selectMapLocation(
     center.lat,
     center.lng,
-    false
+    true
   );
 }
 
@@ -2283,12 +1938,15 @@ async function searchPlace() {
       )}`;
 
     const response =
-      await fetch(url, {
-        headers: {
-          Accept:
-            "application/json"
+      await fetch(
+        url,
+        {
+          headers: {
+            Accept:
+              "application/json"
+          }
         }
-      });
+      );
 
     if (!response.ok) {
       throw new Error(
@@ -2359,11 +2017,14 @@ async function searchPlace() {
     }
 
     showMessage(
-      "تم العثور على المكان.",
+      "تم العثور على المكان ✅",
       "success"
     );
   } catch (error) {
-    console.error(error);
+    console.error(
+      "SEARCH ERROR:",
+      error
+    );
 
     showMessage(
       "حصل خطأ أثناء البحث عن المكان.",
@@ -2385,22 +2046,24 @@ async function reverseGeocodeDestination(
       `https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=ar&lat=${lat}&lon=${lng}`;
 
     const response =
-      await fetch(url, {
-        headers: {
-          Accept:
-            "application/json"
+      await fetch(
+        url,
+        {
+          headers: {
+            Accept:
+              "application/json"
+          }
         }
-      });
+      );
 
-    if (!response.ok) {
-      return;
-    }
+    if (!response.ok) return;
 
     const data =
       await response.json();
 
     if (
-      data?.display_name
+      data?.display_name &&
+      destinationLocation
     ) {
       destinationLocation.address =
         data.display_name;
@@ -2411,7 +2074,10 @@ async function reverseGeocodeDestination(
         "selectedPlace"
       );
 
-    if (selected) {
+    if (
+      selected &&
+      destinationLocation
+    ) {
       selected.textContent =
         `📍 ${
           destinationLocation.address
@@ -2633,7 +2299,7 @@ async function confirmDestination() {
 
     if (!route) {
       showMessage(
-        "تم تحديد المكان، لكن لم نتمكن من حساب مسافة الطريق. حاول مرة أخرى.",
+        "لم نتمكن من حساب مسافة الطريق. حاول مرة أخرى.",
         "error"
       );
 
@@ -2646,10 +2312,18 @@ async function confirmDestination() {
 
     destroyMap();
 
-    renderNewTripPage(true);
-
     destinationLocation =
       savedDestination;
+
+    selectedRoute = {
+      distanceKm:
+        savedDestination.distanceKm,
+
+      durationMinutes:
+        savedDestination.durationMinutes
+    };
+
+    renderNewTripPage(true);
 
     const destinationInput =
       document.getElementById(
@@ -2662,25 +2336,13 @@ async function confirmDestination() {
         "";
     }
 
-    selectedRoute = {
-      distanceKm:
-        savedDestination.distanceKm,
-
-      durationMinutes:
-        savedDestination.durationMinutes
-    };
-
     showRouteInfo(
       selectedRoute.distanceKm,
       selectedRoute.durationMinutes
     );
 
     showMessage(
-      `تم تحديد الوصول: ${formatDistance(
-        selectedRoute.distanceKm
-      )} - حوالي ${formatDuration(
-        selectedRoute.durationMinutes
-      )}`,
+      "تم تحديد مكان الوصول بنجاح ✅",
       "success"
     );
   } catch (error) {
@@ -2747,9 +2409,13 @@ async function createTrip() {
       )?.value
     );
 
-  if (!passengerCount) {
+  if (
+    !passengerCount ||
+    passengerCount < 1 ||
+    passengerCount > 8
+  ) {
     showMessage(
-      "حدد عدد الركاب.",
+      "حدد عدد الركاب من 1 إلى 8.",
       "error"
     );
 
@@ -2785,14 +2451,30 @@ async function createTrip() {
 
     if (
       !route ||
-      !route.distanceKm ||
-      !route.durationMinutes
+      !Number.isFinite(
+        Number(route.distanceKm)
+      )
     ) {
       route =
         await calculateRoadRoute(
           pickupLocation,
           destinationLocation
         );
+    }
+
+    if (!route) {
+      if (button) {
+        button.disabled = false;
+        button.textContent =
+          "🚕 اطلب الرحلة";
+      }
+
+      showMessage(
+        "لم نتمكن من حساب مسافة الطريق.",
+        "error"
+      );
+
+      return;
     }
 
     if (button) {
@@ -2832,16 +2514,15 @@ async function createTrip() {
           destinationLocation.address || ""
       },
 
-      /* تم إصلاح الخطأ هنا */
       distanceKm:
-        route
-          ? route.distanceKm
-          : null,
+        Number(
+          route.distanceKm
+        ),
 
       durationMinutes:
-        route
-          ? route.durationMinutes
-          : null,
+        Number(
+          route.durationMinutes
+        ),
 
       passengerCount,
 
@@ -2851,13 +2532,24 @@ async function createTrip() {
 
       status: "open",
 
+      acceptedCaptainId: null,
+
+      acceptedCaptainName: null,
+
+      acceptedCaptainPhone: null,
+
+      acceptedAt: null,
+
       createdAt:
         serverTimestamp()
     };
 
     const tripRef =
       await addDoc(
-        collection(db, "trips"),
+        collection(
+          db,
+          "trips"
+        ),
         tripData
       );
 
@@ -2905,7 +2597,7 @@ async function createTrip() {
               📏 المسافة:
               <strong>
                 ${formatDistance(
-                  route?.distanceKm
+                  route.distanceKm
                 )}
               </strong>
             </p>
@@ -2914,8 +2606,15 @@ async function createTrip() {
               ⏱️ الوقت التقريبي:
               <strong>
                 ${formatDuration(
-                  route?.durationMinutes
+                  route.durationMinutes
                 )}
+              </strong>
+            </p>
+
+            <p>
+              👥 عدد الركاب:
+              <strong>
+                ${passengerCount}
               </strong>
             </p>
 
@@ -2929,9 +2628,16 @@ async function createTrip() {
           </div>
 
           <button
+            id="myTripNowBtn"
+            class="secondary-btn"
+            style="margin-top:15px;">
+            📋 متابعة الرحلة
+          </button>
+
+          <button
             id="backCustomerBtn"
             class="primary-btn big-btn"
-            style="margin-top:20px;">
+            style="margin-top:10px;">
             ← العودة للرئيسية
           </button>
 
@@ -2941,13 +2647,17 @@ async function createTrip() {
     `;
 
     document.getElementById(
+      "myTripNowBtn"
+    ).onclick =
+      renderCustomerTrips;
+
+    document.getElementById(
       "backCustomerBtn"
     ).onclick = () => {
       renderCustomerHome(
         currentProfile
       );
     };
-
   } catch (error) {
     console.error(
       "CREATE TRIP ERROR:",
@@ -2973,6 +2683,1863 @@ async function createTrip() {
 }
 
 /* ======================================================
+   AVAILABLE TRIPS
+====================================================== */
+
+function renderAvailableTrips() {
+  if (
+    !currentUser ||
+    currentProfile?.role !==
+      "captain"
+  ) {
+    showMessage(
+      "يجب تسجيل الدخول ككابتن أولاً.",
+      "error"
+    );
+
+    return;
+  }
+
+  stopAllListeners();
+
+  appRoot().innerHTML = `
+    <div class="page-container">
+
+      <button
+        id="backCaptainHomeBtn"
+        class="back-btn">
+        ← رجوع
+      </button>
+
+      <div class="dashboard">
+
+        <div class="dashboard-header">
+
+          <h2>
+            🚕 الرحلات المتاحة
+          </h2>
+
+          <p>
+            الرحلات الجديدة تظهر هنا تلقائيًا
+          </p>
+
+        </div>
+
+        <div id="availableTripsList">
+
+          <div class="loading-screen">
+            <div class="loader"></div>
+            <p>جاري تحميل الرحلات...</p>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById(
+    "backCaptainHomeBtn"
+  ).onclick = () => {
+    renderCaptainHome(
+      currentProfile
+    );
+  };
+
+  listenForAvailableTrips();
+}
+
+/* ======================================================
+   LISTEN OPEN TRIPS
+====================================================== */
+
+function listenForAvailableTrips() {
+  const list =
+    document.getElementById(
+      "availableTripsList"
+    );
+
+  if (!list) return;
+
+  try {
+    const tripsQuery =
+      query(
+        collection(
+          db,
+          "trips"
+        ),
+        where(
+          "status",
+          "==",
+          "open"
+        )
+      );
+
+    stopTripsListener =
+      onSnapshot(
+        tripsQuery,
+        (snapshot) => {
+
+          if (snapshot.empty) {
+            list.innerHTML = `
+              <div class="empty-state">
+
+                <div class="empty-icon">
+                  🚕
+                </div>
+
+                <h3>
+                  لا توجد رحلات متاحة الآن
+                </h3>
+
+                <p>
+                  عندما يطلب عميل رحلة ستظهر هنا تلقائيًا.
+                </p>
+
+              </div>
+            `;
+
+            return;
+          }
+
+          const trips = [];
+
+          snapshot.forEach(
+            (tripDoc) => {
+              trips.push({
+                id: tripDoc.id,
+                ...tripDoc.data()
+              });
+            }
+          );
+
+          trips.sort(
+            (a, b) => {
+              const aTime =
+                a.createdAt?.seconds ||
+                0;
+
+              const bTime =
+                b.createdAt?.seconds ||
+                0;
+
+              return bTime - aTime;
+            }
+          );
+
+          list.innerHTML = "";
+
+          trips.forEach(
+            (trip) => {
+              list.appendChild(
+                createCaptainTripCard(
+                  trip,
+                  trip.id
+                )
+              );
+            }
+          );
+        },
+        (error) => {
+          console.error(
+            "CAPTAIN TRIPS ERROR:",
+            error
+          );
+
+          list.innerHTML = `
+            <div class="empty-state">
+
+              <h3>
+                حصل خطأ في تحميل الرحلات
+              </h3>
+
+              <p>
+                ${escapeHtml(
+                  firebaseErrorMessage(
+                    error
+                  )
+                )}
+              </p>
+
+            </div>
+          `;
+        }
+      );
+  } catch (error) {
+    console.error(error);
+
+    list.innerHTML = `
+      <div class="empty-state">
+        <h3>تعذر تحميل الرحلات</h3>
+      </div>
+    `;
+  }
+}
+
+/* ======================================================
+   CAPTAIN TRIP CARD
+====================================================== */
+
+function createCaptainTripCard(
+  trip,
+  tripId
+) {
+  const card =
+    document.createElement(
+      "div"
+    );
+
+  card.className =
+    "captain-trip-card trip-card";
+
+  const pickupAddress =
+    trip.pickup?.address ||
+    "موقع الانطلاق غير محدد";
+
+  const destinationAddress =
+    trip.destination?.address ||
+    "مكان الوصول غير محدد";
+
+  const passengerCount =
+    trip.passengerCount || 1;
+
+  const notes =
+    trip.notes ||
+    "لا توجد ملاحظات";
+
+  const price =
+    trip.proposedPrice || 0;
+
+  const customerName =
+    trip.customerName ||
+    "عميل";
+
+  const customerPhone =
+    trip.customerPhone ||
+    "";
+
+  const distanceText =
+    trip.distanceKm != null
+      ? formatDistance(
+          trip.distanceKm
+        )
+      : "غير محسوبة";
+
+  const durationText =
+    trip.durationMinutes != null
+      ? formatDuration(
+          trip.durationMinutes
+        )
+      : "غير محسوبة";
+
+  card.innerHTML = `
+    <div class="trip-card-header">
+
+      <h3>
+        🚕 رحلة جديدة
+      </h3>
+
+      <span class="trip-status">
+        مفتوحة
+      </span>
+
+    </div>
+
+    <div class="trip-info">
+
+      <div class="trip-info-row">
+        <strong>👤 العميل</strong>
+        <span>
+          ${escapeHtml(
+            customerName
+          )}
+        </span>
+      </div>
+
+      <div class="trip-info-row">
+        <strong>📍 الانطلاق</strong>
+        <span>
+          ${escapeHtml(
+            pickupAddress
+          )}
+        </span>
+      </div>
+
+      <div class="trip-info-row">
+        <strong>🏁 الوصول</strong>
+        <span>
+          ${escapeHtml(
+            destinationAddress
+          )}
+        </span>
+      </div>
+
+      <div class="trip-info-row">
+        <strong>📏 المسافة</strong>
+        <span>
+          ${distanceText}
+        </span>
+      </div>
+
+      <div class="trip-info-row">
+        <strong>⏱️ المدة</strong>
+        <span>
+          ${durationText}
+        </span>
+      </div>
+
+      <div class="trip-info-row">
+        <strong>👥 الركاب</strong>
+        <span>
+          ${passengerCount}
+        </span>
+      </div>
+
+      <div class="trip-info-row">
+        <strong>📝 الملاحظات</strong>
+        <span>
+          ${escapeHtml(notes)}
+        </span>
+      </div>
+
+      <div class="trip-price">
+        💰 السعر المقترح:
+        <strong>
+          ${price} جنيه
+        </strong>
+      </div>
+
+    </div>
+
+    <div class="trip-actions">
+
+      ${
+        customerPhone
+          ? `
+            <a
+              class="primary-btn"
+              href="tel:${escapeHtml(
+                customerPhone
+              )}">
+              📞 اتصال بالعميل
+            </a>
+          `
+          : ""
+      }
+
+      <button
+        class="secondary-btn offerTripBtn">
+        💰 تقديم عرض سعر
+      </button>
+
+      <button
+        class="primary-btn acceptTripBtn">
+        ✅ قبول الرحلة
+      </button>
+
+    </div>
+  `;
+
+  card.querySelector(
+    ".offerTripBtn"
+  ).onclick = () => {
+    openOfferDialog(
+      trip,
+      tripId
+    );
+  };
+
+  card.querySelector(
+    ".acceptTripBtn"
+  ).onclick = () => {
+    acceptTrip(
+      trip,
+      tripId
+    );
+  };
+
+  return card;
+}
+
+/* ======================================================
+   OFFER DIALOG
+====================================================== */
+
+function openOfferDialog(
+  trip,
+  tripId
+) {
+  const old =
+    document.getElementById(
+      "offerDialog"
+    );
+
+  if (old) old.remove();
+
+  const dialog =
+    document.createElement(
+      "div"
+    );
+
+  dialog.id =
+    "offerDialog";
+
+  dialog.innerHTML = `
+    <div
+      style="
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,.55);
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        z-index:99999;
+        padding:20px;
+      ">
+
+      <div
+        style="
+          background:#fff;
+          width:100%;
+          max-width:420px;
+          border-radius:18px;
+          padding:20px;
+          direction:rtl;
+        ">
+
+        <h3>
+          💰 تقديم عرض سعر
+        </h3>
+
+        <p>
+          السعر المقترح من العميل:
+          <strong>
+            ${escapeHtml(
+              trip.proposedPrice || 0
+            )} جنيه
+          </strong>
+        </p>
+
+        <div class="input-group">
+
+          <label>
+            السعر الذي تقترحه
+          </label>
+
+          <input
+            id="offerPriceInput"
+            type="number"
+            min="1"
+            inputmode="numeric"
+            placeholder="اكتب السعر"
+            value="${
+              trip.proposedPrice || ""
+            }"
+          />
+
+        </div>
+
+        <div
+          style="
+            display:flex;
+            gap:10px;
+            margin-top:15px;
+          ">
+
+          <button
+            id="cancelOfferBtn"
+            class="secondary-btn">
+            إلغاء
+          </button>
+
+          <button
+            id="sendOfferBtn"
+            class="primary-btn">
+            إرسال العرض
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+  document.body.appendChild(
+    dialog
+  );
+
+  document.getElementById(
+    "cancelOfferBtn"
+  ).onclick = () => {
+    dialog.remove();
+  };
+
+  document.getElementById(
+    "sendOfferBtn"
+  ).onclick = () => {
+    const value =
+      Number(
+        document.getElementById(
+          "offerPriceInput"
+        )?.value
+      );
+
+    if (!value || value <= 0) {
+      showMessage(
+        "اكتب سعر صحيح.",
+        "error"
+      );
+
+      return;
+    }
+
+    sendTripOffer(
+      trip,
+      tripId,
+      value
+    );
+
+    dialog.remove();
+  };
+}
+
+/* ======================================================
+   SEND OFFER
+====================================================== */
+
+async function sendTripOffer(
+  trip,
+  tripId,
+  price
+) {
+  if (
+    !currentUser ||
+    currentProfile?.role !==
+      "captain"
+  ) {
+    showMessage(
+      "يجب تسجيل الدخول ككابتن.",
+      "error"
+    );
+
+    return;
+  }
+
+  try {
+    const existingQuery =
+      query(
+        collection(
+          db,
+          "trips",
+          tripId,
+          "offers"
+        ),
+        where(
+          "captainId",
+          "==",
+          currentUser.uid
+        )
+      );
+
+    let alreadyExists = false;
+
+    const unsubscribe =
+      onSnapshot(
+        existingQuery,
+        (snapshot) => {
+          alreadyExists =
+            !snapshot.empty;
+        }
+      );
+
+    setTimeout(
+      async () => {
+        unsubscribe();
+
+        if (alreadyExists) {
+          showMessage(
+            "أنت قدمت عرضًا لهذه الرحلة بالفعل.",
+            "error"
+          );
+
+          return;
+        }
+
+        await addDoc(
+          collection(
+            db,
+            "trips",
+            tripId,
+            "offers"
+          ),
+          {
+            captainId:
+              currentUser.uid,
+
+            captainName:
+              currentProfile.name ||
+              "",
+
+            captainPhone:
+              currentProfile.phone ||
+              "",
+
+            carType:
+              currentProfile.carType ||
+              "",
+
+            carModel:
+              currentProfile.carModel ||
+              "",
+
+            carNumber:
+              currentProfile.carNumber ||
+              "",
+
+            price,
+
+            status: "pending",
+
+            createdAt:
+              serverTimestamp()
+          }
+        );
+
+        showMessage(
+          "تم إرسال عرض السعر للعميل ✅",
+          "success"
+        );
+      },
+      300
+    );
+  } catch (error) {
+    console.error(
+      "SEND OFFER ERROR:",
+      error
+    );
+
+    showMessage(
+      firebaseErrorMessage(error),
+      "error"
+    );
+  }
+}
+
+/* ======================================================
+   ACCEPT TRIP
+====================================================== */
+
+async function acceptTrip(
+  trip,
+  tripId
+) {
+  if (
+    !currentUser ||
+    currentProfile?.role !==
+      "captain"
+  ) {
+    showMessage(
+      "يجب تسجيل الدخول ككابتن.",
+      "error"
+    );
+
+    return;
+  }
+
+  const confirmed =
+    window.confirm(
+      `هل تريد قبول الرحلة بسعر ${trip.proposedPrice || 0} جنيه؟`
+    );
+
+  if (!confirmed) return;
+
+  try {
+    const tripRef =
+      doc(
+        db,
+        "trips",
+        tripId
+      );
+
+    const freshTrip =
+      await getDoc(
+        tripRef
+      );
+
+    if (!freshTrip.exists()) {
+      showMessage(
+        "الرحلة غير موجودة.",
+        "error"
+      );
+
+      return;
+    }
+
+    const currentTrip =
+      freshTrip.data();
+
+    if (
+      currentTrip.status !==
+      "open"
+    ) {
+      showMessage(
+        "الرحلة تم قبولها بالفعل أو لم تعد متاحة.",
+        "error"
+      );
+
+      return;
+    }
+
+    await updateDoc(
+      tripRef,
+      {
+        status: "accepted",
+
+        acceptedCaptainId:
+          currentUser.uid,
+
+        acceptedCaptainName:
+          currentProfile.name ||
+          "",
+
+        acceptedCaptainPhone:
+          currentProfile.phone ||
+          "",
+
+        acceptedCaptainCarType:
+          currentProfile.carType ||
+          "",
+
+        acceptedCaptainCarModel:
+          currentProfile.carModel ||
+          "",
+
+        acceptedCaptainCarNumber:
+          currentProfile.carNumber ||
+          "",
+
+        acceptedAt:
+          serverTimestamp()
+      }
+    );
+
+    showMessage(
+      "تم قبول الرحلة بنجاح ✅",
+      "success"
+    );
+
+    renderCaptainTrips();
+  } catch (error) {
+    console.error(
+      "ACCEPT TRIP ERROR:",
+      error
+    );
+
+    showMessage(
+      firebaseErrorMessage(error),
+      "error"
+    );
+  }
+}
+
+/* ======================================================
+   CUSTOMER TRIPS
+====================================================== */
+
+function renderCustomerTrips() {
+  if (
+    !currentUser ||
+    currentProfile?.role !==
+      "customer"
+  ) {
+    showMessage(
+      "يجب تسجيل الدخول كعميل.",
+      "error"
+    );
+
+    return;
+  }
+
+  stopAllListeners();
+
+  appRoot().innerHTML = `
+    <div class="page-container">
+
+      <button
+        id="backBtn"
+        class="back-btn">
+        ← رجوع
+      </button>
+
+      <div class="dashboard">
+
+        <div class="dashboard-header">
+
+          <h2>
+            📋 رحلاتي
+          </h2>
+
+          <p>
+            تابع رحلاتك والعروض المقدمة عليها
+          </p>
+
+        </div>
+
+        <div id="customerTripsList">
+
+          <div class="loading-screen">
+            <div class="loader"></div>
+            <p>جاري تحميل رحلاتك...</p>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById(
+    "backBtn"
+  ).onclick = () => {
+    renderCustomerHome(
+      currentProfile
+    );
+  };
+
+  listenForCustomerTrips();
+}
+
+/* ======================================================
+   CUSTOMER TRIP LISTENER
+====================================================== */
+
+function listenForCustomerTrips() {
+  const list =
+    document.getElementById(
+      "customerTripsList"
+    );
+
+  if (!list) return;
+
+  const tripsQuery =
+    query(
+      collection(
+        db,
+        "trips"
+      ),
+      where(
+        "customerId",
+        "==",
+        currentUser.uid
+      )
+    );
+
+  stopMyTripsListener =
+    onSnapshot(
+      tripsQuery,
+      (snapshot) => {
+
+        if (snapshot.empty) {
+          list.innerHTML = `
+            <div class="empty-state">
+
+              <div class="empty-icon">
+                📋
+              </div>
+
+              <h3>
+                لا توجد رحلات حتى الآن
+              </h3>
+
+              <p>
+                عندما تطلب رحلة ستظهر هنا.
+              </p>
+
+            </div>
+          `;
+
+          return;
+        }
+
+        const trips = [];
+
+        snapshot.forEach(
+          (tripDoc) => {
+            trips.push({
+              id: tripDoc.id,
+              ...tripDoc.data()
+            });
+          }
+        );
+
+        trips.sort(
+          (a, b) => {
+            const aTime =
+              a.createdAt?.seconds ||
+              0;
+
+            const bTime =
+              b.createdAt?.seconds ||
+              0;
+
+            return bTime - aTime;
+          }
+        );
+
+        list.innerHTML = "";
+
+        trips.forEach(
+          (trip) => {
+            list.appendChild(
+              createCustomerTripCard(
+                trip,
+                trip.id
+              )
+            );
+          }
+        );
+      },
+      (error) => {
+        console.error(
+          "CUSTOMER TRIPS ERROR:",
+          error
+        );
+
+        list.innerHTML = `
+          <div class="empty-state">
+            <h3>
+              تعذر تحميل الرحلات
+            </h3>
+
+            <p>
+              ${escapeHtml(
+                firebaseErrorMessage(
+                  error
+                )
+              )}
+            </p>
+          </div>
+        `;
+      }
+    );
+}
+
+/* ======================================================
+   CUSTOMER TRIP CARD
+====================================================== */
+
+function createCustomerTripCard(
+  trip,
+  tripId
+) {
+  const card =
+    document.createElement(
+      "div"
+    );
+
+  card.className =
+    "trip-card";
+
+  let statusText =
+    "مفتوحة";
+
+  if (
+    trip.status ===
+    "accepted"
+  ) {
+    statusText =
+      "تم قبولها";
+  }
+
+  if (
+    trip.status ===
+    "completed"
+  ) {
+    statusText =
+      "مكتملة";
+  }
+
+  card.innerHTML = `
+    <div class="trip-card-header">
+
+      <h3>
+        🚕 رحلتي
+      </h3>
+
+      <span class="trip-status">
+        ${statusText}
+      </span>
+
+    </div>
+
+    <div class="trip-info">
+
+      <div class="trip-info-row">
+        <strong>📍 الانطلاق</strong>
+        <span>
+          ${escapeHtml(
+            trip.pickup?.address ||
+            "-"
+          )}
+        </span>
+      </div>
+
+      <div class="trip-info-row">
+        <strong>🏁 الوصول</strong>
+        <span>
+          ${escapeHtml(
+            trip.destination?.address ||
+            "-"
+          )}
+        </span>
+      </div>
+
+      <div class="trip-info-row">
+        <strong>📏 المسافة</strong>
+        <span>
+          ${
+            trip.distanceKm != null
+              ? formatDistance(
+                  trip.distanceKm
+                )
+              : "-"
+          }
+        </span>
+      </div>
+
+      <div class="trip-info-row">
+        <strong>👥 الركاب</strong>
+        <span>
+          ${trip.passengerCount || 1}
+        </span>
+      </div>
+
+      <div class="trip-info-row">
+        <strong>📝 الملاحظات</strong>
+        <span>
+          ${escapeHtml(
+            trip.notes ||
+            "لا توجد"
+          )}
+        </span>
+      </div>
+
+      <div class="trip-price">
+        💰 السعر المقترح:
+        <strong>
+          ${
+            trip.proposedPrice ||
+            0
+          } جنيه
+        </strong>
+      </div>
+
+      ${
+        trip.acceptedCaptainName
+          ? `
+            <div
+              style="
+                margin-top:12px;
+                padding:12px;
+                border-radius:12px;
+                background:#eef7ff;
+              ">
+
+              <strong>
+                🚕 الكابتن:
+              </strong>
+
+              <div>
+                ${escapeHtml(
+                  trip.acceptedCaptainName
+                )}
+              </div>
+
+              ${
+                trip.acceptedCaptainPhone
+                  ? `
+                    <a
+                      class="primary-btn"
+                      style="margin-top:10px;"
+                      href="tel:${escapeHtml(
+                        trip.acceptedCaptainPhone
+                      )}">
+                      📞 اتصال بالكابتن
+                    </a>
+                  `
+                  : ""
+              }
+
+            </div>
+          `
+          : ""
+      }
+
+    </div>
+
+    ${
+      trip.status === "open"
+        ? `
+          <button
+            class="secondary-btn viewOffersBtn">
+            💰 مشاهدة العروض
+          </button>
+        `
+        : ""
+    }
+
+  `;
+
+  const offersButton =
+    card.querySelector(
+      ".viewOffersBtn"
+    );
+
+  if (offersButton) {
+    offersButton.onclick =
+      () => {
+        renderTripOffers(
+          trip,
+          tripId
+        );
+      };
+  }
+
+  return card;
+}
+
+/* ======================================================
+   TRIP OFFERS
+====================================================== */
+
+function renderTripOffers(
+  trip,
+  tripId
+) {
+  stopAllListeners();
+
+  appRoot().innerHTML = `
+    <div class="page-container">
+
+      <button
+        id="backBtn"
+        class="back-btn">
+        ← رجوع
+      </button>
+
+      <div class="dashboard">
+
+        <div class="dashboard-header">
+
+          <h2>
+            💰 عروض الكباتن
+          </h2>
+
+          <p>
+            السعر المقترح:
+            <strong>
+              ${
+                trip.proposedPrice ||
+                0
+              } جنيه
+            </strong>
+          </p>
+
+        </div>
+
+        <div id="offersList">
+
+          <div class="loading-screen">
+            <div class="loader"></div>
+            <p>جاري تحميل العروض...</p>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById(
+    "backBtn"
+  ).onclick =
+    renderCustomerTrips;
+
+  listenForTripOffers(
+    trip,
+    tripId
+  );
+}
+
+/* ======================================================
+   LISTEN OFFERS
+====================================================== */
+
+function listenForTripOffers(
+  trip,
+  tripId
+) {
+  const list =
+    document.getElementById(
+      "offersList"
+    );
+
+  if (!list) return;
+
+  const offersQuery =
+    query(
+      collection(
+        db,
+        "trips",
+        tripId,
+        "offers"
+      ),
+      where(
+        "status",
+        "==",
+        "pending"
+      )
+    );
+
+  stopMyTripsListener =
+    onSnapshot(
+      offersQuery,
+      (snapshot) => {
+
+        if (snapshot.empty) {
+          list.innerHTML = `
+            <div class="empty-state">
+
+              <div class="empty-icon">
+                💰
+              </div>
+
+              <h3>
+                لا توجد عروض حتى الآن
+              </h3>
+
+              <p>
+                عندما يقدم أحد الكباتن عرضًا سيظهر هنا.
+              </p>
+
+            </div>
+          `;
+
+          return;
+        }
+
+        const offers = [];
+
+        snapshot.forEach(
+          (offerDoc) => {
+            offers.push({
+              id: offerDoc.id,
+              ...offerDoc.data()
+            });
+          }
+        );
+
+        offers.sort(
+          (a, b) => {
+            const aTime =
+              a.createdAt?.seconds ||
+              0;
+
+            const bTime =
+              b.createdAt?.seconds ||
+              0;
+
+            return bTime - aTime;
+          }
+        );
+
+        list.innerHTML = "";
+
+        offers.forEach(
+          (offer) => {
+
+            const card =
+              document.createElement(
+                "div"
+              );
+
+            card.className =
+              "trip-card";
+
+            card.innerHTML = `
+              <div class="trip-card-header">
+
+                <h3>
+                  🚕 ${
+                    escapeHtml(
+                      offer.captainName ||
+                      "كابتن"
+                    )
+                  }
+                </h3>
+
+                <span class="trip-status">
+                  عرض جديد
+                </span>
+
+              </div>
+
+              <div class="trip-info">
+
+                <div class="trip-info-row">
+                  <strong>🚕 السيارة</strong>
+                  <span>
+                    ${escapeHtml(
+                      offer.carType ||
+                      "-"
+                    )}
+                  </span>
+                </div>
+
+                <div class="trip-info-row">
+                  <strong>🚘 الموديل</strong>
+                  <span>
+                    ${escapeHtml(
+                      offer.carModel ||
+                      "-"
+                    )}
+                  </span>
+                </div>
+
+                <div class="trip-info-row">
+                  <strong>🔢 رقم السيارة</strong>
+                  <span>
+                    ${escapeHtml(
+                      offer.carNumber ||
+                      "-"
+                    )}
+                  </span>
+                </div>
+
+                <div class="trip-price">
+                  💰 عرض الكابتن:
+                  <strong>
+                    ${offer.price} جنيه
+                  </strong>
+                </div>
+
+              </div>
+
+              <div class="trip-actions">
+
+                <button
+                  class="primary-btn acceptOfferBtn">
+                  ✅ قبول العرض
+                </button>
+
+                ${
+                  offer.captainPhone
+                    ? `
+                      <a
+                        class="secondary-btn"
+                        href="tel:${escapeHtml(
+                          offer.captainPhone
+                        )}">
+                        📞 اتصال
+                      </a>
+                    `
+                    : ""
+                }
+
+              </div>
+            `;
+
+            card.querySelector(
+              ".acceptOfferBtn"
+            ).onclick = () => {
+              acceptCaptainOffer(
+                trip,
+                tripId,
+                offer
+              );
+            };
+
+            list.appendChild(
+              card
+            );
+          }
+        );
+      },
+      (error) => {
+        console.error(
+          "OFFERS ERROR:",
+          error
+        );
+
+        list.innerHTML = `
+          <div class="empty-state">
+
+            <h3>
+              تعذر تحميل العروض
+            </h3>
+
+            <p>
+              ${escapeHtml(
+                firebaseErrorMessage(
+                  error
+                )
+              )}
+            </p>
+
+          </div>
+        `;
+      }
+    );
+}
+
+/* ======================================================
+   ACCEPT CAPTAIN OFFER
+====================================================== */
+
+async function acceptCaptainOffer(
+  trip,
+  tripId,
+  offer
+) {
+  if (
+    !currentUser ||
+    currentProfile?.role !==
+      "customer"
+  ) {
+    showMessage(
+      "يجب تسجيل الدخول كعميل.",
+      "error"
+    );
+
+    return;
+  }
+
+  const confirmed =
+    window.confirm(
+      `هل تريد قبول عرض ${offer.price} جنيه من الكابتن ${offer.captainName || ""}؟`
+    );
+
+  if (!confirmed) return;
+
+  try {
+    const tripRef =
+      doc(
+        db,
+        "trips",
+        tripId
+      );
+
+    const freshTrip =
+      await getDoc(
+        tripRef
+      );
+
+    if (!freshTrip.exists()) {
+      showMessage(
+        "الرحلة غير موجودة.",
+        "error"
+      );
+
+      return;
+    }
+
+    const currentTrip =
+      freshTrip.data();
+
+    if (
+      currentTrip.status !==
+      "open"
+    ) {
+      showMessage(
+        "الرحلة لم تعد مفتوحة.",
+        "error"
+      );
+
+      return;
+    }
+
+    await updateDoc(
+      tripRef,
+      {
+        status: "accepted",
+
+        acceptedCaptainId:
+          offer.captainId,
+
+        acceptedCaptainName:
+          offer.captainName ||
+          "",
+
+        acceptedCaptainPhone:
+          offer.captainPhone ||
+          "",
+
+        acceptedCaptainCarType:
+          offer.carType ||
+          "",
+
+        acceptedCaptainCarModel:
+          offer.carModel ||
+          "",
+
+        acceptedCaptainCarNumber:
+          offer.carNumber ||
+          "",
+
+        finalPrice:
+          Number(
+            offer.price
+          ),
+
+        acceptedAt:
+          serverTimestamp()
+      }
+    );
+
+    await updateDoc(
+      doc(
+        db,
+        "trips",
+        tripId,
+        "offers",
+        offer.id
+      ),
+      {
+        status: "accepted"
+      }
+    );
+
+    showMessage(
+      "تم قبول عرض الكابتن بنجاح ✅",
+      "success"
+    );
+
+    renderCustomerTrips();
+  } catch (error) {
+    console.error(
+      "ACCEPT OFFER ERROR:",
+      error
+    );
+
+    showMessage(
+      firebaseErrorMessage(error),
+      "error"
+    );
+  }
+}
+
+/* ======================================================
+   CAPTAIN TRIPS
+====================================================== */
+
+function renderCaptainTrips() {
+  if (
+    !currentUser ||
+    currentProfile?.role !==
+      "captain"
+  ) {
+    showMessage(
+      "يجب تسجيل الدخول ككابتن.",
+      "error"
+    );
+
+    return;
+  }
+
+  stopAllListeners();
+
+  appRoot().innerHTML = `
+    <div class="page-container">
+
+      <button
+        id="backBtn"
+        class="back-btn">
+        ← رجوع
+      </button>
+
+      <div class="dashboard">
+
+        <div class="dashboard-header">
+
+          <h2>
+            📋 رحلاتي ككابتن
+          </h2>
+
+          <p>
+            الرحلات التي قدمت عليها أو قبلتها
+          </p>
+
+        </div>
+
+        <div id="captainTripsList">
+
+          <div class="loading-screen">
+            <div class="loader"></div>
+            <p>جاري تحميل الرحلات...</p>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+  document.getElementById(
+    "backBtn"
+  ).onclick = () => {
+    renderCaptainHome(
+      currentProfile
+    );
+  };
+
+  listenForCaptainTrips();
+}
+
+/* ======================================================
+   CAPTAIN TRIPS LISTENER
+====================================================== */
+
+function listenForCaptainTrips() {
+  const list =
+    document.getElementById(
+      "captainTripsList"
+    );
+
+  if (!list) return;
+
+  /*
+     نبحث عن الرحلات المقبولة بواسطة الكابتن.
+     لا نستخدم orderBy هنا حتى لا نحتاج Composite Index.
+  */
+
+  const acceptedQuery =
+    query(
+      collection(
+        db,
+        "trips"
+      ),
+      where(
+        "acceptedCaptainId",
+        "==",
+        currentUser.uid
+      )
+    );
+
+  stopTripsListener =
+    onSnapshot(
+      acceptedQuery,
+      (snapshot) => {
+
+        if (snapshot.empty) {
+          list.innerHTML = `
+            <div class="empty-state">
+
+              <div class="empty-icon">
+                🚕
+              </div>
+
+              <h3>
+                لا توجد رحلات حتى الآن
+              </h3>
+
+              <p>
+                الرحلات التي تقبلها ستظهر هنا.
+              </p>
+
+            </div>
+          `;
+
+          return;
+        }
+
+        const trips = [];
+
+        snapshot.forEach(
+          (tripDoc) => {
+            trips.push({
+              id: tripDoc.id,
+              ...tripDoc.data()
+            });
+          }
+        );
+
+        trips.sort(
+          (a, b) => {
+            const aTime =
+              a.acceptedAt?.seconds ||
+              a.createdAt?.seconds ||
+              0;
+
+            const bTime =
+              b.acceptedAt?.seconds ||
+              b.createdAt?.seconds ||
+              0;
+
+            return bTime - aTime;
+          }
+        );
+
+        list.innerHTML = "";
+
+        trips.forEach(
+          (trip) => {
+
+            const card =
+              document.createElement(
+                "div"
+              );
+
+            card.className =
+              "trip-card";
+
+            card.innerHTML = `
+              <div class="trip-card-header">
+
+                <h3>
+                  🚕 رحلة مقبولة
+                </h3>
+
+                <span class="trip-status">
+                  ${
+                    trip.status ===
+                    "completed"
+                      ? "مكتملة"
+                      : "مقبولة"
+                  }
+                </span>
+
+              </div>
+
+              <div class="trip-info">
+
+                <div class="trip-info-row">
+                  <strong>👤 العميل</strong>
+                  <span>
+                    ${escapeHtml(
+                      trip.customerName ||
+                      "-"
+                    )}
+                  </span>
+                </div>
+
+                <div class="trip-info-row">
+                  <strong>📞 الهاتف</strong>
+                  <span>
+                    ${escapeHtml(
+                      trip.customerPhone ||
+                      "-"
+                    )}
+                  </span>
+                </div>
+
+                <div class="trip-info-row">
+                  <strong>📍 الانطلاق</strong>
+                  <span>
+                    ${escapeHtml(
+                      trip.pickup?.address ||
+                      "-"
+                    )}
+                  </span>
+                </div>
+
+                <div class="trip-info-row">
+                  <strong>🏁 الوصول</strong>
+                  <span>
+                    ${escapeHtml(
+                      trip.destination?.address ||
+                      "-"
+                    )}
+                  </span>
+                </div>
+
+                <div class="trip-info-row">
+                  <strong>👥 الركاب</strong>
+                  <span>
+                    ${
+                      trip.passengerCount ||
+                      1
+                    }
+                  </span>
+                </div>
+
+                <div class="trip-info-row">
+                  <strong>📝 الملاحظات</strong>
+                  <span>
+                    ${escapeHtml(
+                      trip.notes ||
+                      "لا توجد"
+                    )}
+                  </span>
+                </div>
+
+                <div class="trip-price">
+                  💰 السعر النهائي:
+                  <strong>
+                    ${
+                      trip.finalPrice ??
+                      trip.proposedPrice ??
+                      0
+                    } جنيه
+                  </strong>
+                </div>
+
+              </div>
+
+              ${
+                trip.customerPhone
+                  ? `
+                    <a
+                      class="primary-btn"
+                      href="tel:${escapeHtml(
+                        trip.customerPhone
+                      )}">
+                      📞 اتصال بالعميل
+                    </a>
+                  `
+                  : ""
+              }
+
+            `;
+
+            list.appendChild(
+              card
+            );
+          }
+        );
+      },
+      (error) => {
+        console.error(
+          "CAPTAIN HISTORY ERROR:",
+          error
+        );
+
+        list.innerHTML = `
+          <div class="empty-state">
+
+            <h3>
+              تعذر تحميل رحلاتك
+            </h3>
+
+            <p>
+              ${escapeHtml(
+                firebaseErrorMessage(
+                  error
+                )
+              )}
+            </p>
+
+          </div>
+        `;
+      }
+    );
+}
+
+/* ======================================================
    AUTH STATE
 ====================================================== */
 
@@ -2980,6 +4547,7 @@ if (firebaseReady) {
   onAuthStateChanged(
     auth,
     async (user) => {
+
       if (!user) {
         currentUser = null;
         currentProfile = null;
@@ -3002,10 +4570,10 @@ if (firebaseReady) {
           );
 
         if (!profileSnap.exists()) {
+          await signOut(auth);
+
           currentUser = null;
           currentProfile = null;
-
-          await signOut(auth);
 
           renderHome();
 
@@ -3032,7 +4600,9 @@ if (firebaseReady) {
             currentProfile
           );
         }
+
       } catch (error) {
+
         console.error(
           "AUTH STATE ERROR:",
           error
@@ -3044,7 +4614,9 @@ if (firebaseReady) {
         renderHome();
 
         showMessage(
-          firebaseErrorMessage(error),
+          firebaseErrorMessage(
+            error
+          ),
           "error"
         );
       }
