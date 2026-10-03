@@ -36,9 +36,19 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+let firebaseReady = false;
+let app;
+let auth;
+let db;
+
+try {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  firebaseReady = true;
+} catch (error) {
+  console.error("Firebase initialization error:", error);
+}
 
 /* ======================================================
    STATE
@@ -64,6 +74,13 @@ function appRoot() {
 }
 
 function showMessage(message, type = "info") {
+  const root = appRoot();
+
+  if (!root) {
+    console.error(message);
+    return;
+  }
+
   const old = document.querySelector(".app-message");
 
   if (old) {
@@ -75,17 +92,23 @@ function showMessage(message, type = "info") {
   box.className = `app-message ${type}`;
   box.textContent = message;
 
-  appRoot().prepend(box);
+  root.prepend(box);
 
   setTimeout(() => {
     if (box.parentNode) {
       box.remove();
     }
-  }, 4000);
+  }, 5000);
 }
 
 function loading(text = "جاري التحميل...") {
-  appRoot().innerHTML = `
+  const root = appRoot();
+
+  if (!root) {
+    return;
+  }
+
+  root.innerHTML = `
     <div class="loading-screen">
       <div class="loader"></div>
       <p>${text}</p>
@@ -98,11 +121,16 @@ function normalizeEgyptPhone(phone) {
 
   value = value.replace(/\s+/g, "");
 
+  // 010xxxxxxxx -> +2010xxxxxxxx
   if (value.startsWith("01")) {
     value = "+20" + value.substring(1);
   }
 
-  if (value.startsWith("20") && !value.startsWith("+20")) {
+  // 2010xxxxxxxx -> +2010xxxxxxxx
+  if (
+    value.startsWith("20") &&
+    !value.startsWith("+20")
+  ) {
     value = "+" + value;
   }
 
@@ -127,12 +155,21 @@ function createInternalLoginEmail(phone, role) {
 function firebaseErrorMessage(error) {
   const code = error?.code || "unknown";
 
+  console.error(
+    "Firebase error code:",
+    code,
+    error
+  );
+
   const messages = {
     "auth/invalid-credential":
       "رقم الهاتف أو كلمة المرور غير صحيحة.",
 
+    "auth/invalid-login-credentials":
+      "رقم الهاتف أو كلمة المرور غير صحيحة.",
+
     "auth/email-already-in-use":
-      "الحساب موجود بالفعل.",
+      "الحساب موجود بالفعل. استخدم تسجيل الدخول.",
 
     "auth/weak-password":
       "كلمة المرور ضعيفة. استخدم 6 أحرف على الأقل.",
@@ -141,13 +178,25 @@ function firebaseErrorMessage(error) {
       "بيانات الحساب غير صحيحة.",
 
     "auth/user-not-found":
-      "الحساب غير موجود.",
+      "الحساب غير موجود. تأكد من اختيار عميل أو كابتن بشكل صحيح.",
 
     "auth/wrong-password":
       "كلمة المرور غير صحيحة.",
 
     "auth/network-request-failed":
-      "تأكد من اتصال الإنترنت."
+      "تأكد من اتصال الإنترنت.",
+
+    "auth/too-many-requests":
+      "تمت محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.",
+
+    "permission-denied":
+      "الحساب دخل بنجاح، لكن صلاحية قراءة بيانات الحساب من Firebase غير مسموحة.",
+
+    "failed-precondition":
+      "يوجد إعداد ناقص في Firebase.",
+
+    "unavailable":
+      "Firebase غير متاح حاليًا. تأكد من الإنترنت وحاول مرة أخرى."
   };
 
   return (
@@ -156,12 +205,31 @@ function firebaseErrorMessage(error) {
   );
 }
 
+function checkFirebase() {
+  if (!firebaseReady || !auth || !db) {
+    showMessage(
+      "تعذر تشغيل Firebase. تأكد من إعدادات Firebase في GitHub Secrets ثم أعد بناء التطبيق.",
+      "error"
+    );
+
+    return false;
+  }
+
+  return true;
+}
+
 /* ======================================================
    HOME
 ====================================================== */
 
 function renderHome() {
-  appRoot().innerHTML = `
+  const root = appRoot();
+
+  if (!root) {
+    return;
+  }
+
+  root.innerHTML = `
     <div class="page-container">
 
       <div class="brand">
@@ -170,6 +238,8 @@ function renderHome() {
       </div>
 
       <div class="home-card">
+
+        <h3>اختار طريقة الدخول</h3>
 
         <button
           id="customerLoginBtn"
@@ -194,20 +264,41 @@ function renderHome() {
     </div>
   `;
 
-  document.getElementById(
-    "customerLoginBtn"
-  ).onclick = () =>
-    renderAuth("customer", "login");
+  const customerButton =
+    document.getElementById(
+      "customerLoginBtn"
+    );
 
-  document.getElementById(
-    "captainLoginBtn"
-  ).onclick = () =>
-    renderAuth("captain", "login");
+  const captainButton =
+    document.getElementById(
+      "captainLoginBtn"
+    );
 
-  document.getElementById(
-    "registerBtn"
-  ).onclick = () =>
-    renderAuth("customer", "register");
+  const registerButton =
+    document.getElementById(
+      "registerBtn"
+    );
+
+  if (customerButton) {
+    customerButton.onclick = () => {
+      selectedRole = "customer";
+      renderAuth("customer", "login");
+    };
+  }
+
+  if (captainButton) {
+    captainButton.onclick = () => {
+      selectedRole = "captain";
+      renderAuth("captain", "login");
+    };
+  }
+
+  if (registerButton) {
+    registerButton.onclick = () => {
+      selectedRole = "customer";
+      renderAuth("customer", "register");
+    };
+  }
 }
 
 /* ======================================================
@@ -223,7 +314,13 @@ function renderAuth(
   const isRegister =
     mode === "register";
 
-  appRoot().innerHTML = `
+  const root = appRoot();
+
+  if (!root) {
+    return;
+  }
+
+  root.innerHTML = `
     <div class="page-container">
 
       <button
@@ -266,6 +363,14 @@ function renderAuth(
 
         </div>
 
+        <div class="selected-role-text">
+          ${
+            role === "customer"
+              ? "أنت الآن تدخل كعميل"
+              : "أنت الآن تدخل ككابتن"
+          }
+        </div>
+
         <div class="input-group">
 
           <label>
@@ -276,6 +381,7 @@ function renderAuth(
             id="phoneInput"
             type="tel"
             inputmode="numeric"
+            autocomplete="tel"
             placeholder="01xxxxxxxxx"
           />
 
@@ -293,6 +399,7 @@ function renderAuth(
                 <input
                   id="nameInput"
                   type="text"
+                  autocomplete="name"
                   placeholder="اكتب اسمك"
                 />
 
@@ -359,6 +466,11 @@ function renderAuth(
           <input
             id="passwordInput"
             type="password"
+            autocomplete="${
+              isRegister
+                ? "new-password"
+                : "current-password"
+            }"
             placeholder="كلمة المرور"
           />
 
@@ -403,43 +515,50 @@ function renderAuth(
 
   document.getElementById(
     "customerRoleBtn"
-  ).onclick = () =>
+  ).onclick = () => {
     renderAuth(
       "customer",
       mode
     );
+  };
 
   document.getElementById(
     "captainRoleBtn"
-  ).onclick = () =>
+  ).onclick = () => {
     renderAuth(
       "captain",
       mode
     );
+  };
 
   document.getElementById(
     "authBtn"
-  ).onclick = () =>
-    isRegister
-      ? registerAccount()
-      : loginAccount();
+  ).onclick = () => {
+    if (isRegister) {
+      registerAccount();
+    } else {
+      loginAccount();
+    }
+  };
 
   if (isRegister) {
     document.getElementById(
       "loginInsteadBtn"
-    ).onclick = () =>
+    ).onclick = () => {
       renderAuth(
         role,
         "login"
       );
+    };
   } else {
     document.getElementById(
       "registerInsteadBtn"
-    ).onclick = () =>
+    ).onclick = () => {
       renderAuth(
         role,
         "register"
       );
+    };
   }
 }
 
@@ -448,6 +567,10 @@ function renderAuth(
 ====================================================== */
 
 async function registerAccount() {
+  if (!checkFirebase()) {
+    return;
+  }
+
   const phone =
     normalizeEgyptPhone(
       document.getElementById(
@@ -467,7 +590,7 @@ async function registerAccount() {
 
   if (!isValidEgyptPhone(phone)) {
     showMessage(
-      "اكتب رقم هاتف مصري صحيح.",
+      "اكتب رقم هاتف مصري صحيح مثل 01012345678.",
       "error"
     );
 
@@ -512,15 +635,10 @@ async function registerAccount() {
 
     const profile = {
       uid: result.user.uid,
-
       phone,
-
       name,
-
       role: selectedRole,
-
-      createdAt:
-        serverTimestamp()
+      createdAt: serverTimestamp()
     };
 
     if (
@@ -558,11 +676,6 @@ async function registerAccount() {
     currentProfile =
       profile;
 
-    showMessage(
-      "تم إنشاء الحساب بنجاح.",
-      "success"
-    );
-
     if (
       selectedRole ===
       "captain"
@@ -576,17 +689,25 @@ async function registerAccount() {
       );
     }
 
-  } catch (error) {
-    console.error(error);
-
     showMessage(
-      firebaseErrorMessage(error),
-      "error"
+      "تم إنشاء الحساب بنجاح.",
+      "success"
+    );
+
+  } catch (error) {
+    console.error(
+      "REGISTER ERROR:",
+      error
     );
 
     renderAuth(
       selectedRole,
       "register"
+    );
+
+    showMessage(
+      firebaseErrorMessage(error),
+      "error"
     );
   }
 }
@@ -596,6 +717,10 @@ async function registerAccount() {
 ====================================================== */
 
 async function loginAccount() {
+  if (!checkFirebase()) {
+    return;
+  }
+
   const phone =
     normalizeEgyptPhone(
       document.getElementById(
@@ -608,9 +733,12 @@ async function loginAccount() {
       "passwordInput"
     )?.value || "";
 
+  const roleAtLogin =
+    selectedRole;
+
   if (!isValidEgyptPhone(phone)) {
     showMessage(
-      "اكتب رقم هاتف مصري صحيح.",
+      "اكتب رقم هاتف مصري صحيح مثل 01012345678.",
       "error"
     );
 
@@ -629,13 +757,29 @@ async function loginAccount() {
   const email =
     createInternalLoginEmail(
       phone,
-      selectedRole
+      roleAtLogin
     );
+
+  console.log(
+    "LOGIN ROLE:",
+    roleAtLogin
+  );
+
+  console.log(
+    "LOGIN EMAIL:",
+    email
+  );
 
   try {
     loading(
-      "جاري تسجيل الدخول..."
+      roleAtLogin === "captain"
+        ? "جاري دخول الكابتن..."
+        : "جاري دخول العميل..."
     );
+
+    /*
+      Firebase Authentication
+    */
 
     const result =
       await signInWithEmailAndPassword(
@@ -647,6 +791,15 @@ async function loginAccount() {
     currentUser =
       result.user;
 
+    console.log(
+      "Firebase login successful:",
+      result.user.uid
+    );
+
+    /*
+      Read profile
+    */
+
     const profileSnap =
       await getDoc(
         doc(
@@ -656,60 +809,123 @@ async function loginAccount() {
         )
       );
 
+    /*
+      لو الحساب موجود في Authentication
+      لكن ملف users غير موجود،
+      ننشئ ملف أساسي بدل ما نعتبر الدخول فشل.
+    */
+
     if (!profileSnap.exists()) {
-      throw new Error(
-        "PROFILE_NOT_FOUND"
+
+      console.warn(
+        "Profile not found. Creating basic profile."
       );
+
+      currentProfile = {
+        uid: result.user.uid,
+        phone,
+        name: "",
+        role: roleAtLogin
+      };
+
+      await setDoc(
+        doc(
+          db,
+          "users",
+          result.user.uid
+        ),
+        {
+          ...currentProfile,
+          createdAt:
+            serverTimestamp()
+        },
+        {
+          merge: true
+        }
+      );
+
+    } else {
+
+      currentProfile =
+        profileSnap.data();
     }
 
-    currentProfile =
-      profileSnap.data();
+    /*
+      تأكيد نوع الحساب
+    */
 
     if (
+      currentProfile.role &&
       currentProfile.role !==
-      selectedRole
+        roleAtLogin
     ) {
+
       await signOut(auth);
 
-      showMessage(
-        "نوع الحساب غير مطابق.",
-        "error"
+      currentUser = null;
+      currentProfile = null;
+
+      renderAuth(
+        roleAtLogin,
+        "login"
       );
 
-      renderHome();
+      showMessage(
+        "هذا الحساب مسجل بنوع مختلف. اختار عميل أو كابتن الصحيح.",
+        "error"
+      );
 
       return;
     }
 
+    /*
+      الدخول للمنصة المناسبة
+    */
+
     if (
-      selectedRole ===
+      roleAtLogin ===
       "captain"
     ) {
+
       renderCaptainHome(
         currentProfile
       );
+
     } else {
+
       renderCustomerHome(
         currentProfile
       );
     }
 
-  } catch (error) {
-    console.error(error);
-
     showMessage(
-      error.message ===
-        "PROFILE_NOT_FOUND"
-        ? "بيانات الحساب غير موجودة."
-        : firebaseErrorMessage(
-            error
-          ),
-      "error"
+      roleAtLogin === "captain"
+        ? "تم تسجيل الدخول ككابتن بنجاح."
+        : "تم تسجيل الدخول كعميل بنجاح.",
+      "success"
     );
 
+  } catch (error) {
+
+    console.error(
+      "LOGIN ERROR:",
+      error
+    );
+
+    /*
+      مهم:
+      نعرض شاشة الدخول أولاً
+      وبعدها الرسالة حتى لا تختفي.
+    */
+
     renderAuth(
-      selectedRole,
+      roleAtLogin,
       "login"
+    );
+
+    showMessage(
+      firebaseErrorMessage(error),
+      "error"
     );
   }
 }
@@ -789,7 +1005,7 @@ function renderCustomerHome(
     "accountBtn"
   ).onclick = () => {
     showMessage(
-      `رقم الهاتف: ${profile.phone}`,
+      `رقم الهاتف: ${profile.phone || "-"}`,
       "info"
     );
   };
@@ -798,7 +1014,11 @@ function renderCustomerHome(
     "logoutBtn"
   ).onclick =
     async () => {
-      await signOut(auth);
+      try {
+        await signOut(auth);
+      } catch (error) {
+        console.error(error);
+      }
 
       currentUser = null;
       currentProfile = null;
@@ -916,7 +1136,11 @@ function renderCaptainHome(
     "logoutBtn"
   ).onclick =
     async () => {
-      await signOut(auth);
+      try {
+        await signOut(auth);
+      } catch (error) {
+        console.error(error);
+      }
 
       currentUser = null;
       currentProfile = null;
@@ -1117,7 +1341,6 @@ function renderNewTripPage(
 
 /* ======================================================
    CURRENT LOCATION
-   NO CAPACITOR GEOLOCATION
 ====================================================== */
 
 async function getPickupLocation() {
@@ -1190,16 +1413,12 @@ async function getPickupLocation() {
         ) {
           message =
             "اسمح للتطبيق باستخدام الموقع من إعدادات الهاتف.";
-        }
-
-        else if (
+        } else if (
           error.code === 2
         ) {
           message =
             "تعذر تحديد موقعك. شغّل GPS وحاول مرة أخرى.";
-        }
-
-        else if (
+        } else if (
           error.code === 3
         ) {
           message =
@@ -1214,9 +1433,7 @@ async function getPickupLocation() {
 
       {
         enableHighAccuracy: true,
-
         timeout: 20000,
-
         maximumAge: 5000
       }
     );
@@ -1547,7 +1764,7 @@ async function searchPlace() {
     }
 
     showMessage(
-      "تم العثور على المكان. يمكنك تحريك الخريطة للتحديد بدقة.",
+      "تم العثور على المكان.",
       "success"
     );
 
@@ -1612,10 +1829,9 @@ async function confirmDestination() {
     );
   }
 
-  const savedDestination =
-    {
-      ...destinationLocation
-    };
+  const savedDestination = {
+    ...destinationLocation
+  };
 
   if (tripMap) {
 
@@ -1629,9 +1845,7 @@ async function confirmDestination() {
     pickupMarker = null;
   }
 
-  renderNewTripPage(
-    true
-  );
+  renderNewTripPage(true);
 
   destinationLocation =
     savedDestination;
@@ -1879,7 +2093,7 @@ async function createTrip() {
     }
 
     showMessage(
-      "لم يتم إرسال الرحلة. تأكد من اتصال الإنترنت.",
+      "لم يتم إرسال الرحلة. تأكد من اتصال الإنترنت وصلاحيات Firebase.",
       "error"
     );
   }
@@ -1889,66 +2103,106 @@ async function createTrip() {
    AUTH STATE
 ====================================================== */
 
-onAuthStateChanged(
-  auth,
-  async (user) => {
+if (firebaseReady) {
 
-    if (!user) {
+  onAuthStateChanged(
+    auth,
+    async (user) => {
 
-      if (!currentUser) {
-        renderHome();
-      }
+      if (!user) {
 
-      return;
-    }
-
-    currentUser =
-      user;
-
-    try {
-
-      const profileSnap =
-        await getDoc(
-          doc(
-            db,
-            "users",
-            user.uid
-          )
-        );
-
-      if (
-        !profileSnap.exists()
-      ) {
+        currentUser = null;
+        currentProfile = null;
 
         renderHome();
 
         return;
       }
 
-      currentProfile =
-        profileSnap.data();
+      currentUser =
+        user;
 
-      if (
-        currentProfile.role ===
-        "captain"
-      ) {
+      try {
 
-        renderCaptainHome(
-          currentProfile
+        const profileSnap =
+          await getDoc(
+            doc(
+              db,
+              "users",
+              user.uid
+            )
+          );
+
+        if (
+          !profileSnap.exists()
+        ) {
+
+          /*
+            الحساب موجود في Authentication
+            لكن لا يوجد Profile.
+          */
+
+          renderHome();
+
+          showMessage(
+            "الحساب موجود، لكن بيانات الحساب غير مكتملة. سجل الدخول مرة أخرى.",
+            "error"
+          );
+
+          return;
+        }
+
+        currentProfile =
+          profileSnap.data();
+
+        if (
+          currentProfile.role ===
+          "captain"
+        ) {
+
+          selectedRole =
+            "captain";
+
+          renderCaptainHome(
+            currentProfile
+          );
+
+        } else {
+
+          selectedRole =
+            "customer";
+
+          renderCustomerHome(
+            currentProfile
+          );
+        }
+
+      } catch (error) {
+
+        console.error(
+          "AUTH STATE ERROR:",
+          error
         );
 
-      } else {
+        currentUser = null;
+        currentProfile = null;
 
-        renderCustomerHome(
-          currentProfile
+        renderHome();
+
+        showMessage(
+          firebaseErrorMessage(error),
+          "error"
         );
       }
-
-    } catch (error) {
-
-      console.error(error);
-
-      renderHome();
     }
-  }
-);
+  );
+
+} else {
+
+  renderHome();
+
+  showMessage(
+    "Firebase لم يتم تشغيله.",
+    "error"
+  );
+}
