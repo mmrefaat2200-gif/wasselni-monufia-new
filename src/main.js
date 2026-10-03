@@ -1358,9 +1358,9 @@ async function getPickupLocation() {
       "info"
     );
 
-    /*
-      Capacitor Android
-    */
+    /* -----------------------------------------------
+       ANDROID / CAPACITOR
+    ------------------------------------------------ */
 
     if (Capacitor.isNativePlatform()) {
 
@@ -1369,9 +1369,14 @@ async function getPickupLocation() {
           "Geolocation"
         );
 
+      console.log(
+        "GEOLOCATION PLUGIN AVAILABLE:",
+        pluginAvailable
+      );
+
       if (!pluginAvailable) {
         showMessage(
-          "إضافة تحديد الموقع غير موجودة في نسخة التطبيق.",
+          "إضافة تحديد الموقع غير موجودة في نسخة التطبيق. أعد بناء التطبيق بعد تثبيت @capacitor/geolocation.",
           "error"
         );
         return;
@@ -1381,20 +1386,26 @@ async function getPickupLocation() {
         await Geolocation.checkPermissions();
 
       console.log(
-        "LOCATION PERMISSIONS:",
+        "LOCATION PERMISSIONS BEFORE:",
         permissions
       );
+
+      /*
+        طلب صلاحية الموقع بشكل صريح
+      */
 
       if (
         permissions.location !==
         "granted"
       ) {
         permissions =
-          await Geolocation.requestPermissions();
+          await Geolocation.requestPermissions({
+            permissions: ["location"]
+          });
       }
 
       console.log(
-        "LOCATION PERMISSIONS AFTER REQUEST:",
+        "LOCATION PERMISSIONS AFTER:",
         permissions
       );
 
@@ -1403,12 +1414,17 @@ async function getPickupLocation() {
         "granted"
       ) {
         showMessage(
-          "إذن الموقع مرفوض. افتح إعدادات التطبيق > الأذونات > الموقع واسمح بالموقع.",
+          "إذن الموقع غير مسموح. افتح إعدادات التطبيق > الأذونات > الموقع، ثم اختر السماح أثناء استخدام التطبيق.",
           "error"
         );
 
         return;
       }
+
+      showMessage(
+        "📡 جاري تحديد موقعك بدقة...",
+        "info"
+      );
 
       const position =
         await Geolocation.getCurrentPosition(
@@ -1419,14 +1435,19 @@ async function getPickupLocation() {
           }
         );
 
+      console.log(
+        "CURRENT POSITION:",
+        position
+      );
+
       const lat =
         Number(
-          position.coords.latitude
+          position?.coords?.latitude
         );
 
       const lng =
         Number(
-          position.coords.longitude
+          position?.coords?.longitude
         );
 
       if (
@@ -1474,9 +1495,9 @@ async function getPickupLocation() {
       return;
     }
 
-    /*
-      Browser
-    */
+    /* -----------------------------------------------
+       BROWSER
+    ------------------------------------------------ */
 
     if (!navigator.geolocation) {
       showMessage(
@@ -1499,6 +1520,17 @@ async function getPickupLocation() {
           Number(
             position.coords.longitude
           );
+
+        if (
+          !Number.isFinite(lat) ||
+          !Number.isFinite(lng)
+        ) {
+          showMessage(
+            "تعذر قراءة موقعك الحالي.",
+            "error"
+          );
+          return;
+        }
 
         pickupLocation = {
           lat,
@@ -1594,7 +1626,7 @@ async function getPickupLocation() {
       text.includes("denied")
     ) {
       showMessage(
-        "إذن الموقع مرفوض. افتح إعدادات التطبيق واسمح بالموقع.",
+        "إذن الموقع مرفوض. افتح إعدادات التطبيق واسمح للموقع أثناء استخدام التطبيق.",
         "error"
       );
 
@@ -1606,6 +1638,17 @@ async function getPickupLocation() {
     ) {
       showMessage(
         "انتهى وقت تحديد الموقع. شغّل GPS وحاول مرة أخرى.",
+        "error"
+      );
+
+      return;
+    }
+
+    if (
+      text.includes("location")
+    ) {
+      showMessage(
+        "تعذر تحديد الموقع الحالي. تأكد من تشغيل GPS وحاول مرة أخرى.",
         "error"
       );
 
@@ -3048,6 +3091,7 @@ function createCaptainTripCard(
 
   return card;
 }
+
 /* ======================================================
    OFFER DIALOG
 ====================================================== */
