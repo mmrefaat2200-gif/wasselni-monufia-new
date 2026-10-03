@@ -39,27 +39,6 @@ jobs:
       - name: Add Android
         run: npx cap add android
 
-      - name: Add location permissions
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("android/app/src/main/AndroidManifest.xml")
-          text = path.read_text()
-
-          permissions = [
-              '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
-              '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />'
-          ]
-
-          for permission in permissions:
-              if permission not in text:
-                  pos = text.find(">") + 1
-                  text = text[:pos] + "\n" + permission + text[pos:]
-
-          path.write_text(text)
-          PY
-
       - name: Sync Android
         run: npx cap sync android
 
