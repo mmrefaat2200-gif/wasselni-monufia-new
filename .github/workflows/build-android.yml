@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -38,7 +39,7 @@ jobs:
       - name: Add Android
         run: npx cap add android
 
-        - name: Add location permissions
+      - name: Add location permissions
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -53,17 +54,13 @@ jobs:
 
           for permission in permissions:
               if permission not in text:
-                  text = text.replace(
-                      '<manifest',
-                      '<manifest',
-                      1
-                  )
-                  marker = '>'
-                  pos = text.find(marker) + 1
-                  text = text[:pos] + '\n' + permission + text[pos:]
+                  pos = text.find(">") + 1
+                  text = text[:pos] + "\n" + permission + text[pos:]
 
           path.write_text(text)
-          PY    - name: Sync Android
+          PY
+
+      - name: Sync Android
         run: npx cap sync android
 
       - name: Setup Java
