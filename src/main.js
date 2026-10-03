@@ -1435,7 +1435,6 @@ function createCaptainTripCard(
 
   return card;
 }
-
 /* ======================================================
    NEW TRIP
 ====================================================== */
@@ -2572,6 +2571,7 @@ async function confirmDestination() {
     selectedRoute = {
       distanceKm:
         savedDestination.distanceKm,
+
       durationMinutes:
         savedDestination.durationMinutes
     };
@@ -2738,15 +2738,16 @@ async function createTrip() {
           destinationLocation.address || ""
       },
 
+      /* تم إصلاح الخطأ هنا */
       distanceKm:
-      
-        ? route.distanceKm
-        : null,
+        route
+          ? route.distanceKm
+          : null,
 
       durationMinutes:
         route
-        ? route.durationMinutes
-        : null,
+          ? route.durationMinutes
+          : null,
 
       passengerCount,
 
