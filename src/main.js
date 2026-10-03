@@ -1651,59 +1651,7 @@ function renderNewTripPage(
    LOCATION
 ====================================================== */
 
-async function getPickupLocation() {
-  try {
-    showMessage(
-      "جاري طلب إذن الموقع...",
-      "info"
-    );
-
-    if (Capacitor.isNativePlatform()) {
-      try {
-        let permissions =
-          await Geolocation.checkPermissions();
-
-        if (
-          permissions.location !==
-          "granted"
-        ) {
-          showMessage(
-            "اسمح للتطبيق باستخدام موقعك الحالي...",
-            "info"
-          );
-
-          permissions =
-            await Geolocation.requestPermissions();
-        }
-
-        if (
-          permissions.location !==
-          "granted"
-        ) {
-          showMessage(
-            "لم يتم السماح للتطبيق باستخدام موقعك. اسمح بإذن الموقع ثم حاول مرة أخرى.",
-            "error"
-          );
-
-          return;
-        }
-
-        showMessage(
-          "جاري تحديد مكانك...",
-          "info"
-        );
-
-        const position =
-          await Geolocation.getCurrentPosition(
-            {
-              enableHighAccuracy: true,
-              timeout: 20000,
-              maximumAge: 5000
-            }
-          );
-
-        const lat =
-          position.coords.latitude;
+.coords.latitude;
 
         const lng =
           position.coords.longitude;
@@ -1808,11 +1756,121 @@ async function getPickupLocation() {
           lat,
           lng,
           address:
-            `موقع العميل (${lat.toFixed(
-              6
-            )}, ${lng.toFixed(
-              6
-            )})`
+async function getPickupLocation() {
+  try {
+    // ==========================================
+    // Android / Capacitor
+    // ==========================================
+    if (Capacitor.isNativePlatform()) {
+
+      // أول ما المستخدم يضغط "موقعي"
+      // نطلب إذن الموقع من أندرويد مباشرة
+      let permissions =
+        await Geolocation.checkPermissions();
+
+      if (permissions.location !== "granted") {
+        permissions =
+          await Geolocation.requestPermissions();
+      }
+
+      // لو المستخدم رفض الإذن
+      if (permissions.location !== "granted") {
+        showMessage(
+          "لم يتم السماح باستخدام موقعك. يمكنك السماح بالموقع من إعدادات التطبيق.",
+          "error"
+        );
+
+        return;
+      }
+
+      // ==========================================
+      // الحصول على الموقع الحالي
+      // ==========================================
+      showMessage(
+        "📍 جاري تحديد موقعك...",
+        "info"
+      );
+
+      const position =
+        await Geolocation.getCurrentPosition({
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 0
+        });
+
+      const lat =
+        position.coords.latitude;
+
+      const lng =
+        position.coords.longitude;
+
+      // ==========================================
+      // حفظ موقع الانطلاق
+      // ==========================================
+      pickupLocation = {
+        lat,
+        lng,
+        address:
+          `موقع العميل (${lat.toFixed(6)}, ${lng.toFixed(6)})`
+      };
+
+      // ==========================================
+      // تحديث خانة مكان الانطلاق
+      // ==========================================
+      const input =
+        document.getElementById(
+          "pickupAddress"
+        );
+
+      if (input) {
+        input.value =
+          "📍 تم تحديد موقعي الحالي";
+      }
+
+      // ==========================================
+      // حساب الطريق لو الوجهة موجودة
+      // ==========================================
+      if (destinationLocation) {
+        await calculateRoadRoute(
+          pickupLocation,
+          destinationLocation
+        );
+      }
+
+      showMessage(
+        "تم تحديد موقع الانطلاق بنجاح ✅",
+        "success"
+      );
+
+      return;
+    }
+
+    // ==========================================
+    // Browser fallback
+    // ==========================================
+    if (!navigator.geolocation) {
+      showMessage(
+        "الموقع غير مدعوم على هذا الجهاز.",
+        "error"
+      );
+
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+
+        const lat =
+          position.coords.latitude;
+
+        const lng =
+          position.coords.longitude;
+
+        pickupLocation = {
+          lat,
+          lng,
+          address:
+            `موقع العميل (${lat.toFixed(6)}, ${lng.toFixed(6)})`
         };
 
         const input =
@@ -1825,62 +1883,98 @@ async function getPickupLocation() {
             "📍 تم تحديد موقعي الحالي";
         }
 
-        showMessage(
-          "تم تحديد موقع الانطلاق بنجاح ✅",
-          "success"
-        );
-
         if (destinationLocation) {
           await calculateRoadRoute(
             pickupLocation,
             destinationLocation
           );
         }
+
+        showMessage(
+          "تم تحديد موقع الانطلاق بنجاح ✅",
+          "success"
+        );
       },
+
       (error) => {
         console.error(
           "WEB GEOLOCATION ERROR:",
           error
         );
 
-        let message =
-          "لم نتمكن من تحديد موقعك.";
-
         if (error.code === 1) {
-          message =
-            "اسمح للمتصفح باستخدام الموقع ثم حاول مرة أخرى.";
+          showMessage(
+            "لم يتم السماح باستخدام الموقع.",
+            "error"
+          );
         } else if (error.code === 2) {
-          message =
-            "تعذر تحديد موقعك. شغّل GPS وحاول مرة أخرى.";
+          showMessage(
+            "تعذر تحديد موقعك. شغّل GPS وحاول مرة أخرى.",
+            "error"
+          );
         } else if (error.code === 3) {
-          message =
-            "انتهى وقت تحديد الموقع. تأكد من تشغيل GPS وحاول مرة أخرى.";
+          showMessage(
+            "انتهى وقت تحديد الموقع. حاول مرة أخرى.",
+            "error"
+          );
+        } else {
+          showMessage(
+            "تعذر تحديد موقعك. حاول مرة أخرى.",
+            "error"
+          );
         }
-
-        showMessage(
-          message,
-          "error"
-        );
       },
+
       {
         enableHighAccuracy: true,
         timeout: 20000,
-        maximumAge: 5000
+        maximumAge: 0
       }
     );
+
   } catch (error) {
+
     console.error(
       "GET LOCATION ERROR:",
       error
     );
+
+    const errorText =
+      String(
+        error?.message ||
+        error?.code ||
+        ""
+      ).toLowerCase();
+
+    if (
+      errorText.includes("permission") ||
+      errorText.includes("denied")
+    ) {
+      showMessage(
+        "لم يتم السماح باستخدام الموقع.",
+        "error"
+      );
+
+      return;
+    }
+
+    if (
+      errorText.includes("timeout")
+    ) {
+      showMessage(
+        "انتهى وقت تحديد الموقع. شغّل GPS وحاول مرة أخرى.",
+        "error"
+      );
+
+      return;
+    }
 
     showMessage(
       "حدث خطأ أثناء تحديد موقعك. حاول مرة أخرى.",
       "error"
     );
   }
-}
-
+} 
 /* ======================================================
    DESTINATION MAP
 ====================================================== */
