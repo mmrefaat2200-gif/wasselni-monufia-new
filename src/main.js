@@ -2739,4 +2739,222 @@ async function createTrip() {
       },
 
       distanceKm:
+      
+        ? route.distanceKm
+        : null,
+
+      durationMinutes:
         route
+        ? route.durationMinutes
+        : null,
+
+      passengerCount,
+
+      notes,
+
+      proposedPrice,
+
+      status: "open",
+
+      createdAt:
+        serverTimestamp()
+    };
+
+    const tripRef =
+      await addDoc(
+        collection(db, "trips"),
+        tripData
+      );
+
+    console.log(
+      "TRIP CREATED:",
+      tripRef.id
+    );
+
+    if (button) {
+      button.disabled = false;
+      button.textContent =
+        "🚕 اطلب الرحلة";
+    }
+
+    appRoot().innerHTML = `
+      <div class="page-container">
+
+        <div class="success-card">
+
+          <div
+            style="
+              font-size:60px;
+              margin-bottom:15px;
+            ">
+            ✅
+          </div>
+
+          <h2>
+            تم طلب الرحلة بنجاح
+          </h2>
+
+          <p>
+            تم إرسال رحلتك للكباتن المتاحين.
+          </p>
+
+          <div
+            style="
+              margin-top:18px;
+              padding:15px;
+              border-radius:12px;
+              background:#eef7ff;
+            ">
+
+            <p>
+              📏 المسافة:
+              <strong>
+                ${formatDistance(
+                  route?.distanceKm
+                )}
+              </strong>
+            </p>
+
+            <p>
+              ⏱️ الوقت التقريبي:
+              <strong>
+                ${formatDuration(
+                  route?.durationMinutes
+                )}
+              </strong>
+            </p>
+
+            <p>
+              💰 السعر المقترح:
+              <strong>
+                ${proposedPrice} جنيه
+              </strong>
+            </p>
+
+          </div>
+
+          <button
+            id="backCustomerBtn"
+            class="primary-btn big-btn"
+            style="margin-top:20px;">
+            ← العودة للرئيسية
+          </button>
+
+        </div>
+
+      </div>
+    `;
+
+    document.getElementById(
+      "backCustomerBtn"
+    ).onclick = () => {
+      renderCustomerHome(
+        currentProfile
+      );
+    };
+
+  } catch (error) {
+    console.error(
+      "CREATE TRIP ERROR:",
+      error
+    );
+
+    const button =
+      document.getElementById(
+        "submitTripBtn"
+      );
+
+    if (button) {
+      button.disabled = false;
+      button.textContent =
+        "🚕 اطلب الرحلة";
+    }
+
+    showMessage(
+      firebaseErrorMessage(error),
+      "error"
+    );
+  }
+}
+
+/* ======================================================
+   AUTH STATE
+====================================================== */
+
+if (firebaseReady) {
+  onAuthStateChanged(
+    auth,
+    async (user) => {
+      if (!user) {
+        currentUser = null;
+        currentProfile = null;
+
+        renderHome();
+
+        return;
+      }
+
+      try {
+        currentUser = user;
+
+        const profileSnap =
+          await getDoc(
+            doc(
+              db,
+              "users",
+              user.uid
+            )
+          );
+
+        if (!profileSnap.exists()) {
+          currentUser = null;
+          currentProfile = null;
+
+          await signOut(auth);
+
+          renderHome();
+
+          showMessage(
+            "لم يتم العثور على بيانات الحساب.",
+            "error"
+          );
+
+          return;
+        }
+
+        currentProfile =
+          profileSnap.data();
+
+        if (
+          currentProfile.role ===
+          "captain"
+        ) {
+          renderCaptainHome(
+            currentProfile
+          );
+        } else {
+          renderCustomerHome(
+            currentProfile
+          );
+        }
+      } catch (error) {
+        console.error(
+          "AUTH STATE ERROR:",
+          error
+        );
+
+        currentUser = null;
+        currentProfile = null;
+
+        renderHome();
+
+        showMessage(
+          firebaseErrorMessage(error),
+          "error"
+        );
+      }
+    }
+  );
+} else {
+  renderHome();
+}
