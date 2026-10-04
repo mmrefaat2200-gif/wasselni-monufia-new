@@ -46,7 +46,7 @@ import { Geolocation } from "@capacitor/geolocation";
    ========================================================= */
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD1w6D5QYYIOn0QLz5r8KqXo8z8WRjJKs",
+  apiKey: "AIzaSyD1w6MD5QYYIOn0QLz5r8KqXo8z8WRjJKs",
   authDomain: "wasselni-monufia-ac5fc.firebaseapp.com",
   projectId: "wasselni-monufia-ac5fc",
   storageBucket: "wasselni-monufia-ac5fc.firebasestorage.app",
@@ -55,11 +55,8 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-
 const auth = getAuth(app);
-
 const db = getFirestore(app);
-
 const storage = getStorage(app);
 
 setPersistence(auth, browserLocalPersistence).catch(console.error);
@@ -88,12 +85,6 @@ let destination = null;
 
 let authBusy = false;
 
-/*
-  وضع الخريطة الحالي:
-
-  pickup      = تحديد الانطلاق
-  destination = تحديد الوصول
-*/
 let mapMode = "destination";
 
 
@@ -1062,10 +1053,6 @@ async function centerChanged() {
     ++centerRequestId;
 
 
-  /*
-    تحديد الانطلاق
-  */
-
   if (mapMode === "pickup") {
 
     pickup = point;
@@ -1083,13 +1070,7 @@ async function centerChanged() {
         marker("pickup", pickup);
     }
 
-  }
-
-  /*
-    تحديد الوصول
-  */
-
-  else {
+  } else {
 
     destination = point;
 
@@ -1122,12 +1103,6 @@ async function centerChanged() {
     );
 
 
-  /*
-    لو المستخدم حرّك الخريطة
-    مرة ثانية أثناء البحث،
-    لا نعرض نتيجة قديمة.
-  */
-
   if (requestId !== centerRequestId) {
     return;
   }
@@ -1135,16 +1110,9 @@ async function centerChanged() {
 
   $("#address").innerHTML =
     mapMode === "pickup"
-
       ? `📍 <strong>${esc(address)}</strong>`
-
       : `🏁 <strong>${esc(address)}</strong>`;
 
-
-  /*
-    رسم الطريق فقط لو عندنا
-    انطلاق ووصول.
-  */
 
   drawRoute();
 }
@@ -1181,10 +1149,8 @@ function initMap() {
     startPoint =
       destination
         ? [destination.lat, destination.lng]
-
         : pickup
           ? [pickup.lat, pickup.lng]
-
           : [30.5526, 31.0106];
   }
 
@@ -1218,23 +1184,13 @@ function initMap() {
   );
 
 
-  /*
-    إظهار ماركر الانطلاق لو موجود
-  */
-
   if (pickup) {
-
     pickupMarker =
       marker("pickup", pickup);
   }
 
 
-  /*
-    إظهار ماركر الوصول لو موجود
-  */
-
   if (destination) {
-
     destMarker =
       marker("destination", destination);
   }
@@ -1242,10 +1198,6 @@ function initMap() {
 
   updateMapModeUI();
 
-
-  /*
-    تحديث العنوان للمكان الحالي
-  */
 
   setTimeout(
     () => centerChanged(),
@@ -1287,11 +1239,6 @@ function openPickupMap() {
       );
 
     } else if (destination) {
-
-      /*
-        لو مفيش انطلاق لكن فيه وصول،
-        نبدأ قريب من الوصول مؤقتاً.
-      */
 
       map.setView(
         [
@@ -1346,11 +1293,6 @@ function openDestinationMap() {
       );
 
     } else if (pickup) {
-
-      /*
-        الوصول يبدأ من مكان الانطلاق
-        عشان يكون أسهل للمستخدم.
-      */
 
       map.setView(
         [
@@ -1467,12 +1409,6 @@ async function setPickup() {
       error
     );
 
-    /*
-      مهم:
-      لو GPS مقفول لا نمنع المستخدم
-      من استخدام الخريطة يدوياً.
-    */
-
     msg(
       "لم نتمكن من استخدام GPS. يمكنك تحديد الانطلاق يدوياً من الخريطة.",
       "error"
@@ -1572,7 +1508,6 @@ async function searchPlaces(queryText) {
 
     box.innerHTML =
       data.length
-
         ? data
             .map(
               (item) =>
@@ -1588,7 +1523,6 @@ async function searchPlaces(queryText) {
                 `
             )
             .join("")
-
         : "<div class='status'>لا توجد نتائج.</div>";
 
 
@@ -1606,10 +1540,6 @@ async function searchPlaces(queryText) {
               Number(button.dataset.lon)
           };
 
-
-          /*
-            لو وضع الخريطة انطلاق
-          */
 
           if (mapMode === "pickup") {
 
@@ -1632,13 +1562,7 @@ async function searchPlaces(queryText) {
                 );
             }
 
-          }
-
-          /*
-            لو وضع الخريطة وصول
-          */
-
-          else {
+          } else {
 
             destination = point;
 
@@ -1685,9 +1609,7 @@ async function searchPlaces(queryText) {
 
           $("#address").innerHTML =
             mapMode === "pickup"
-
               ? `📍 <strong>${esc(button.dataset.name)}</strong>`
-
               : `🏁 <strong>${esc(button.dataset.name)}</strong>`;
 
 
@@ -1712,41 +1634,20 @@ async function searchPlaces(queryText) {
    MAP EVENTS
    ========================================================= */
 
-
-/*
-  فتح خريطة الانطلاق
-*/
-
 $("#choosePickup").onclick =
   () => {
-
     openPickupMap();
   };
 
 
-/*
-  GPS للانطلاق فقط
-*/
-
 $("#myLocation").onclick =
   async () => {
-
     await setPickup();
   };
 
 
-/*
-  زر GPS داخل الخريطة
-*/
-
 $("#mapLocation").onclick =
   async () => {
-
-    /*
-      زر الموقع داخل الخريطة
-      معناه دائماً تحديد الانطلاق
-      من GPS إذا كان وضع الخريطة pickup.
-    */
 
     if (mapMode === "pickup") {
 
@@ -1755,12 +1656,6 @@ $("#mapLocation").onclick =
       return;
     }
 
-
-    /*
-      في وضع الوصول، GPS اختياري أيضاً.
-      لو المستخدم ضغطه نستخدم موقع الجهاز
-      كنقطة وصول.
-    */
 
     try {
 
@@ -1832,20 +1727,11 @@ $("#mapLocation").onclick =
   };
 
 
-/*
-  فتح خريطة الوصول
-*/
-
 $("#chooseDest").onclick =
   () => {
-
     openDestinationMap();
   };
 
-
-/*
-  إغلاق الخريطة
-*/
 
 $("#closeMap").onclick =
   () => {
@@ -1857,10 +1743,6 @@ $("#closeMap").onclick =
     screen("home");
   };
 
-
-/*
-  تأكيد المكان
-*/
 
 $("#confirmDest").onclick =
   async () => {
@@ -1906,10 +1788,6 @@ $("#confirmDest").onclick =
       return;
     }
 
-
-    /*
-      تأكيد الوصول
-    */
 
     if (!destination) {
 
@@ -2371,6 +2249,20 @@ async function uploadProfilePhoto(
     }
   );
 
+
+  /*
+    مهم جداً:
+    هنا تم إغلاق دالة رفع الصورة.
+    كود إنشاء الحساب وتسجيل الدخول
+    أصبح خارجها ويعمل عند تشغيل التطبيق.
+  */
+
+  return await getDownloadURL(
+    storageRef
+  );
+}
+
+
 /* =========================================================
    REGISTER
    ========================================================= */
@@ -2397,10 +2289,6 @@ $("#finishReg").onclick =
 
     $("#regMsg").textContent = "";
 
-
-    /* =========================
-       VALIDATION
-       ========================= */
 
     if (!name) {
 
@@ -2438,10 +2326,6 @@ $("#finishReg").onclick =
     }
 
 
-    /* =========================
-       CAPTAIN VALIDATION
-       ========================= */
-
     if (
       role === "captain" &&
       (
@@ -2470,11 +2354,6 @@ $("#finishReg").onclick =
         "جاري إنشاء الحساب...";
 
 
-      /*
-        رقم الموبايل يتحول داخلياً إلى إيميل
-        والمستخدم لا يرى هذا الإيميل.
-      */
-
       const internalEmail =
         loginEmail(
           phoneNumber,
@@ -2488,10 +2367,6 @@ $("#finishReg").onclick =
       );
 
 
-      /* =========================
-         FIREBASE AUTH
-         ========================= */
-
       const credential =
         await createUserWithEmailAndPassword(
           auth,
@@ -2503,10 +2378,6 @@ $("#finishReg").onclick =
       const newUser =
         credential.user;
 
-
-      /* =========================
-         PROFILE DATA
-         ========================= */
 
       const data = {
 
@@ -2539,10 +2410,6 @@ $("#finishReg").onclick =
       };
 
 
-      /* =========================
-         CAPTAIN DATA
-         ========================= */
-
       if (role === "captain") {
 
         data.age =
@@ -2568,10 +2435,6 @@ $("#finishReg").onclick =
       }
 
 
-      /* =========================
-         FIRESTORE PROFILE
-         ========================= */
-
       try {
 
         await setDoc(
@@ -2590,12 +2453,6 @@ $("#finishReg").onclick =
           firestoreError
         );
 
-
-        /*
-          لو إنشاء Auth نجح لكن Firestore فشل،
-          نحاول حذف الحساب حتى لا يصبح الحساب
-          موجوداً بدون بيانات.
-        */
 
         try {
 
@@ -2616,10 +2473,6 @@ $("#finishReg").onclick =
       }
 
 
-      /* =========================
-         LOCAL STATE
-         ========================= */
-
       user =
         newUser;
 
@@ -2639,10 +2492,6 @@ $("#finishReg").onclick =
         "success"
       );
 
-
-      /* =========================
-         OPEN CORRECT SCREEN
-         ========================= */
 
       if (role === "captain") {
 
@@ -2665,10 +2514,6 @@ $("#finishReg").onclick =
         error
       );
 
-
-      /* =========================
-         FIREBASE ERRORS
-         ========================= */
 
       if (
         error.code ===
@@ -2775,10 +2620,6 @@ $("#loginBtn").onclick =
     $("#loginMsg").textContent = "";
 
 
-    /* =========================
-       VALIDATION
-       ========================= */
-
     if (
       !/^\+20\d{10}$/.test(
         phoneNumber
@@ -2811,11 +2652,6 @@ $("#loginBtn").onclick =
         "جاري الدخول...";
 
 
-      /*
-        نفس الإيميل الداخلي الذي تم استخدامه
-        وقت إنشاء الحساب.
-      */
-
       const internalEmail =
         loginEmail(
           phoneNumber,
@@ -2828,10 +2664,6 @@ $("#loginBtn").onclick =
         internalEmail
       );
 
-
-      /* =========================
-         FIREBASE LOGIN
-         ========================= */
 
       let credential;
 
@@ -2846,11 +2678,6 @@ $("#loginBtn").onclick =
           );
 
       } catch (loginError) {
-
-        /*
-          دعم الحسابات القديمة التي كانت
-          تستخدم نظام الإيميل القديم.
-        */
 
         if (
           (
@@ -2913,10 +2740,6 @@ $("#loginBtn").onclick =
         credential.user;
 
 
-      /* =========================
-         GET FIRESTORE PROFILE
-         ========================= */
-
       const profileRef =
         doc(
           db,
@@ -2951,10 +2774,6 @@ $("#loginBtn").onclick =
         profileDoc.data();
 
 
-      /* =========================
-         CHECK ROLE
-         ========================= */
-
       if (
         userProfile.role !== role
       ) {
@@ -2973,10 +2792,6 @@ $("#loginBtn").onclick =
       }
 
 
-      /* =========================
-         SUCCESS
-         ========================= */
-
       user =
         loggedUser;
 
@@ -2993,10 +2808,6 @@ $("#loginBtn").onclick =
         "success"
       );
 
-
-      /* =========================
-         OPEN CORRECT SCREEN
-         ========================= */
 
       if (role === "captain") {
 
@@ -3118,12 +2929,6 @@ $("#loginBtn").onclick =
         "تسجيل الدخول";
     }
   };
-  return await getDownloadURL(
-    storageRef
-  );
-}
-
-     
 /* =========================================================
    LOAD PROFILE
    ========================================================= */
