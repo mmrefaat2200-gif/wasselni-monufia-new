@@ -42,6 +42,47 @@ jobs:
       - name: Sync Android
         run: npx cap sync android
 
+      - name: Add Android location permissions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("android/app/src/main/AndroidManifest.xml")
+
+          if not path.exists():
+              raise SystemExit("AndroidManifest.xml was not found")
+
+          text = path.read_text()
+
+          permissions = [
+              '<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
+              '<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />'
+          ]
+
+          manifest_match = re.search(r'<manifest\b[^>]*>', text)
+
+          if not manifest_match:
+              raise SystemExit("The <manifest> tag was not found")
+
+          insert_at = manifest_match.end()
+
+          missing_permissions = [
+              permission
+              for permission in permissions
+              if permission not in text
+          ]
+
+          if missing_permissions:
+              addition = "\n\n    " + "\n    ".join(missing_permissions) + "\n"
+              text = text[:insert_at] + addition + text[insert_at:]
+
+          path.write_text(text)
+
+          print("Android location permissions added successfully.")
+          print(path.read_text())
+          PY
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
