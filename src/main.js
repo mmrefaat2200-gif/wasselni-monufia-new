@@ -87,6 +87,23 @@ let authBusy = false;
 
 let mapMode = "destination";
 
+/* =========================================================
+   LIVE TRACKING STATE
+   ========================================================= */
+
+let trackingMap = null;
+let trackingCaptainMarker = null;
+let trackingPickupMarker = null;
+let trackingDestinationMarker = null;
+let trackingRouteLayer = null;
+
+let captainLocationWatchId = null;
+let trackingRideUnsubscribe = null;
+let activeTrackingRideId = null;
+let trackingHasFitted = false;
+let trackingLastRouteAt = 0;
+let trackingLastRoutePoint = null;
+
 
 /* =========================================================
    HELPERS
@@ -217,6 +234,12 @@ function screen(id) {
         ? "none"
         : "flex";
   }
+
+  if (id === "trackingScreen" && trackingMap) {
+    setTimeout(() => {
+      trackingMap.invalidateSize();
+    }, 200);
+  }
 }
 
 
@@ -228,9 +251,10 @@ function statusText(status) {
   return (
     {
       open: "بانتظار كابتن",
+      price_offered: "الكابتن اقترح سعر جديد",
       accepted: "تم قبول الرحلة",
-      captain_to_customer: "الكابتن في الطريق",
-      arrived: "الكابتن وصل",
+      captain_to_customer: "الكابتن في الطريق إليك",
+      arrived: "الكابتن وصل إليك",
       started: "الرحلة بدأت",
       completed: "انتهت الرحلة",
       cancelled: "ملغاة"
@@ -262,6 +286,48 @@ function formatDate(value) {
     month: "2-digit",
     year: "numeric"
   }).format(new Date(`${value}T12:00:00`));
+}
+
+
+/* =========================================================
+   DISTANCE
+   ========================================================= */
+
+function distanceMeters(a, b) {
+  if (!a || !b) return Infinity;
+
+  const R = 6371000;
+
+  const lat1 =
+    Number(a.lat) * Math.PI / 180;
+
+  const lat2 =
+    Number(b.lat) * Math.PI / 180;
+
+  const dLat =
+    (Number(b.lat) - Number(a.lat)) *
+    Math.PI / 180;
+
+  const dLng =
+    (Number(b.lng) - Number(a.lng)) *
+    Math.PI / 180;
+
+  const x =
+    Math.sin(dLat / 2) *
+    Math.sin(dLat / 2) +
+    Math.cos(lat1) *
+    Math.cos(lat2) *
+    Math.sin(dLng / 2) *
+    Math.sin(dLng / 2);
+
+  return (
+    R *
+    2 *
+    Math.atan2(
+      Math.sqrt(x),
+      Math.sqrt(1 - x)
+    )
+  );
 }
 
 
@@ -757,6 +823,78 @@ $("#app").innerHTML = `
 </section>
 
 
+<!-- LIVE TRACKING -->
+
+<section
+  id="trackingScreen"
+  class="screen"
+>
+
+  <div class="card">
+
+    <div class="map-head">
+
+      <div>
+
+        <h2 id="trackingTitle">
+          🚗 تتبع الرحلة
+        </h2>
+
+        <small id="trackingHint">
+          جاري تحميل موقع الكابتن...
+        </small>
+
+      </div>
+
+      <button
+        id="closeTracking"
+        class="btn danger small-btn"
+      >
+        إغلاق
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <div class="map-wrapper">
+
+    <div
+      id="trackingMap"
+      style="
+        height:60vh;
+        min-height:360px;
+        width:100%;
+        border-radius:16px;
+        overflow:hidden;
+      "
+    ></div>
+
+  </div>
+
+
+  <div class="card">
+
+    <div
+      id="trackingStatus"
+      class="status"
+    >
+      جاري تحديد حالة الرحلة...
+    </div>
+
+    <div
+      id="trackingAddress"
+      class="status"
+    >
+      جاري تحديد موقع الكابتن...
+    </div>
+
+  </div>
+
+</section>
+
+
 <!-- CUSTOMER RIDES -->
 
 <section id="rides" class="screen">
@@ -986,6 +1124,832 @@ function marker(type, point) {
     [point.lat, point.lng],
     { icon }
   ).addTo(map);
+}
+
+
+/* =========================================================
+   TRACKING MARKER
+   ========================================================= */
+
+function trackingIcon(type) {
+
+  let emoji = "🚗";
+
+  if (type === "pickup") {
+    emoji = "📍";
+  }
+
+  if (type === "destination") {
+    emoji = "🏁";
+  }
+
+  return L.divIcon({
+
+    className: "tracking-marker",
+
+    html: `
+      <div
+        style="
+          width:44px;
+          height:44px;
+          border-radius:50%;
+          background:white;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:28px;
+          box-shadow:0 3px 12px rgba(0,0,0,.3);
+          border:3px solid #0878df;
+        "
+      >
+        ${emoji}
+      </div>
+    `,
+
+    iconSize: [44, 44],
+
+    iconAnchor: [22, 22]
+  });
+}
+
+
+/* =========================================================
+   INIT TRACKING MAP
+   ========================================================= */
+
+function initTrackingMap(ride) {
+
+  if (!ride) return;
+
+  let start = null;
+
+  if (ride.captainLocation) {
+
+    start = [
+      Number(ride.captainLocation.lat),
+      Number(ride.captainLocation.lng)
+    ];
+
+  } else if (ride.pickupCoords) {
+
+    start = [
+      Number(ride.pickupCoords.lat),
+      Number(ride.pickupCoords.lng)
+    ];
+
+  } else if (ride.destinationCoords) {
+
+    start = [
+      Number(ride.destinationCoords.lat),
+      Number(ride.destinationCoords.lng)
+    ];
+
+  } else {
+
+    start = [
+      30.5526,
+      31.0106
+    ];
+  }
+
+
+  if (!trackingMap) {
+
+    trackingMap =
+      L.map(
+        "trackingMap",
+        {
+          zoomControl: false
+        }
+      ).setView(
+        start,
+        15
+      );
+
+
+    L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        maxZoom: 20,
+        attribution:
+          "© OpenStreetMap contributors"
+      }
+    ).addTo(trackingMap);
+
+
+    L.control.zoom({
+      position: "bottomright"
+    }).addTo(trackingMap);
+
+  } else {
+
+    setTimeout(
+      () => trackingMap.invalidateSize(),
+      100
+    );
+  }
+
+
+  trackingHasFitted = false;
+
+  updateTrackingMap(ride);
+}
+
+
+/* =========================================================
+   UPDATE TRACKING MAP
+   ========================================================= */
+
+async function updateTrackingMap(ride) {
+
+  if (!ride || !trackingMap) {
+    return;
+  }
+
+
+  $("#trackingStatus").textContent =
+    `🚦 ${statusText(ride.status)}`;
+
+
+  if (ride.status === "captain_to_customer") {
+
+    $("#trackingTitle").textContent =
+      "🚗 الكابتن في الطريق إليك";
+
+    $("#trackingHint").textContent =
+      "موقع الكابتن بيتحدث لحظيًا أثناء توجهه إليك.";
+
+  } else if (ride.status === "arrived") {
+
+    $("#trackingTitle").textContent =
+      "📍 الكابتن وصل";
+
+    $("#trackingHint").textContent =
+      "الكابتن وصل إلى مكان الانطلاق.";
+
+  } else if (ride.status === "started") {
+
+    $("#trackingTitle").textContent =
+      "🛣️ الرحلة بدأت";
+
+    $("#trackingHint").textContent =
+      "الكابتن في طريقه إلى وجهة الرحلة.";
+
+  } else {
+
+    $("#trackingTitle").textContent =
+      "🚗 تتبع الرحلة";
+
+    $("#trackingHint").textContent =
+      "تابع حالة الرحلة على الخريطة.";
+  }
+
+
+  if (ride.captainLocation) {
+
+    const captain = {
+      lat:
+        Number(ride.captainLocation.lat),
+
+      lng:
+        Number(ride.captainLocation.lng)
+    };
+
+
+    if (trackingCaptainMarker) {
+
+      trackingCaptainMarker.setLatLng([
+        captain.lat,
+        captain.lng
+      ]);
+
+    } else {
+
+      trackingCaptainMarker =
+        L.marker(
+          [
+            captain.lat,
+            captain.lng
+          ],
+          {
+            icon:
+              trackingIcon("captain")
+          }
+        ).addTo(trackingMap);
+
+    }
+
+
+    if (
+      ride.status === "captain_to_customer" &&
+      ride.pickupCoords
+    ) {
+
+      await updateTrackingRoute(
+        captain,
+        ride.pickupCoords
+      );
+
+    } else if (
+      ride.status === "started" &&
+      ride.destinationCoords
+    ) {
+
+      await updateTrackingRoute(
+        captain,
+        ride.destinationCoords
+      );
+    }
+
+
+    try {
+
+      const address =
+        await reverse(
+          captain.lat,
+          captain.lng
+        );
+
+      $("#trackingAddress").innerHTML =
+        `📍 موقع الكابتن الآن:<br><strong>${esc(address)}</strong>`;
+
+    } catch {}
+
+  } else {
+
+    $("#trackingAddress").textContent =
+      "📍 في انتظار إرسال موقع الكابتن...";
+  }
+
+
+  if (ride.pickupCoords) {
+
+    const pickupPoint = {
+      lat:
+        Number(ride.pickupCoords.lat),
+
+      lng:
+        Number(ride.pickupCoords.lng)
+    };
+
+
+    if (trackingPickupMarker) {
+
+      trackingPickupMarker.setLatLng([
+        pickupPoint.lat,
+        pickupPoint.lng
+      ]);
+
+    } else {
+
+      trackingPickupMarker =
+        L.marker(
+          [
+            pickupPoint.lat,
+            pickupPoint.lng
+          ],
+          {
+            icon:
+              trackingIcon("pickup")
+          }
+        ).addTo(trackingMap);
+    }
+  }
+
+
+  if (ride.destinationCoords) {
+
+    const destinationPoint = {
+      lat:
+        Number(
+          ride.destinationCoords.lat
+        ),
+
+      lng:
+        Number(
+          ride.destinationCoords.lng
+        )
+    };
+
+
+    if (trackingDestinationMarker) {
+
+      trackingDestinationMarker.setLatLng([
+        destinationPoint.lat,
+        destinationPoint.lng
+      ]);
+
+    } else {
+
+      trackingDestinationMarker =
+        L.marker(
+          [
+            destinationPoint.lat,
+            destinationPoint.lng
+          ],
+          {
+            icon:
+              trackingIcon("destination")
+          }
+        ).addTo(trackingMap);
+    }
+  }
+
+
+  if (!trackingHasFitted) {
+
+    const points = [];
+
+    if (ride.captainLocation) {
+
+      points.push([
+        Number(ride.captainLocation.lat),
+        Number(ride.captainLocation.lng)
+      ]);
+    }
+
+    if (ride.status === "captain_to_customer") {
+
+      if (ride.pickupCoords) {
+
+        points.push([
+          Number(ride.pickupCoords.lat),
+          Number(ride.pickupCoords.lng)
+        ]);
+      }
+
+    } else if (ride.destinationCoords) {
+
+      points.push([
+        Number(ride.destinationCoords.lat),
+        Number(ride.destinationCoords.lng)
+      ]);
+    }
+
+
+    if (points.length >= 2) {
+
+      trackingMap.fitBounds(
+        L.latLngBounds(points),
+        {
+          padding: [50, 50]
+        }
+      );
+
+    } else if (points.length === 1) {
+
+      trackingMap.setView(
+        points[0],
+        16
+      );
+    }
+
+
+    trackingHasFitted = true;
+  }
+
+
+  setTimeout(
+    () => trackingMap.invalidateSize(),
+    100
+  );
+}
+
+
+/* =========================================================
+   UPDATE TRACKING ROUTE
+   ========================================================= */
+
+async function updateTrackingRoute(
+  from,
+  to
+) {
+
+  if (!trackingMap || !from || !to) {
+    return;
+  }
+
+
+  const now = Date.now();
+
+  const moved =
+    distanceMeters(
+      trackingLastRoutePoint,
+      from
+    );
+
+
+  if (
+    trackingLastRoutePoint &&
+    moved < 30 &&
+    now - trackingLastRouteAt < 8000
+  ) {
+
+    return;
+  }
+
+
+  trackingLastRouteAt = now;
+
+  trackingLastRoutePoint = {
+    lat: from.lat,
+    lng: from.lng
+  };
+
+
+  try {
+
+    const url =
+      `https://router.project-osrm.org/route/v1/driving/` +
+      `${from.lng},${from.lat};` +
+      `${to.lng},${to.lat}` +
+      `?overview=full&geometries=geojson`;
+
+
+    const response =
+      await fetch(url);
+
+
+    const data =
+      await response.json();
+
+
+    if (!data.routes?.length) {
+      return;
+    }
+
+
+    if (trackingRouteLayer) {
+
+      trackingRouteLayer.remove();
+    }
+
+
+    trackingRouteLayer =
+      L.geoJSON(
+        data.routes[0].geometry,
+        {
+          style: {
+            weight: 6,
+            opacity: 0.85
+          }
+        }
+      ).addTo(trackingMap);
+
+  } catch (error) {
+
+    console.error(
+      "TRACKING ROUTE ERROR:",
+      error
+    );
+  }
+}
+
+
+/* =========================================================
+   OPEN TRACKING
+   ========================================================= */
+
+function openTracking(ride) {
+
+  if (!ride) return;
+
+
+  activeTrackingRideId =
+    ride.id;
+
+
+  screen("trackingScreen");
+
+
+  setTimeout(() => {
+
+    initTrackingMap(ride);
+
+  }, 150);
+
+
+  if (trackingRideUnsubscribe) {
+
+    trackingRideUnsubscribe();
+
+    trackingRideUnsubscribe = null;
+  }
+
+
+  trackingRideUnsubscribe =
+    onSnapshot(
+      doc(
+        db,
+        "rides",
+        ride.id
+      ),
+      (snapshot) => {
+
+        if (!snapshot.exists()) {
+          return;
+        }
+
+
+        const currentRide = {
+          id: snapshot.id,
+          ...snapshot.data()
+        };
+
+
+        setTimeout(() => {
+
+          if (!trackingMap) {
+            initTrackingMap(
+              currentRide
+            );
+          } else {
+            updateTrackingMap(
+              currentRide
+            );
+          }
+
+        }, 50);
+      },
+      (error) => {
+
+        console.error(
+          "TRACKING SNAPSHOT ERROR:",
+          error
+        );
+      }
+    );
+}
+
+
+/* =========================================================
+   CLOSE TRACKING
+   ========================================================= */
+
+$("#closeTracking").onclick =
+  () => {
+
+    if (trackingRideUnsubscribe) {
+
+      trackingRideUnsubscribe();
+
+      trackingRideUnsubscribe =
+        null;
+    }
+
+
+    activeTrackingRideId =
+      null;
+
+
+    screen(
+      profile?.role === "captain"
+        ? "captain"
+        : "rides"
+    );
+  };
+
+
+/* =========================================================
+   START CAPTAIN LIVE LOCATION
+   ========================================================= */
+
+async function startCaptainLocationTracking(
+  rideId
+) {
+
+  if (
+    !user ||
+    profile?.role !== "captain"
+  ) {
+    return false;
+  }
+
+
+  await stopCaptainLocationTracking();
+
+
+  try {
+
+    const permission =
+      await Geolocation.checkPermissions();
+
+
+    if (
+      permission.location !==
+      "granted"
+    ) {
+
+      const result =
+        await Geolocation.requestPermissions();
+
+
+      if (
+        result.location !==
+        "granted"
+      ) {
+
+        msg(
+          "لازم تسمح للتطبيق باستخدام الموقع حتى يظهر مكانك للعميل.",
+          "error"
+        );
+
+        return false;
+      }
+    }
+
+
+    activeTrackingRideId =
+      rideId;
+
+
+    const position =
+      await Geolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 0
+      });
+
+
+    const firstPoint = {
+
+      lat:
+        position.coords.latitude,
+
+      lng:
+        position.coords.longitude
+    };
+
+
+    await updateDoc(
+      doc(
+        db,
+        "rides",
+        rideId
+      ),
+      {
+        captainLocation:
+          firstPoint,
+
+        captainLocationUpdatedAt:
+          serverTimestamp()
+      }
+    );
+
+
+    captainLocationWatchId =
+      await Geolocation.watchPosition(
+        {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 2000
+        },
+
+        async (
+          position,
+          error
+        ) => {
+
+          if (error) {
+
+            console.error(
+              "CAPTAIN LIVE LOCATION ERROR:",
+              error
+            );
+
+            return;
+          }
+
+
+          if (
+            !position ||
+            !user ||
+            activeTrackingRideId !==
+              rideId
+          ) {
+
+            return;
+          }
+
+
+          const point = {
+
+            lat:
+              position.coords.latitude,
+
+            lng:
+              position.coords.longitude
+          };
+
+
+          try {
+
+            await updateDoc(
+              doc(
+                db,
+                "rides",
+                rideId
+              ),
+              {
+                captainLocation:
+                  point,
+
+                captainLocationUpdatedAt:
+                  serverTimestamp()
+              }
+            );
+
+          } catch (firestoreError) {
+
+            console.error(
+              "CAPTAIN LIVE LOCATION FIRESTORE ERROR:",
+              firestoreError
+            );
+          }
+
+
+          if (
+            trackingMap &&
+            activeTrackingRideId ===
+              rideId
+          ) {
+
+            if (
+              trackingCaptainMarker
+            ) {
+
+              trackingCaptainMarker
+                .setLatLng([
+                  point.lat,
+                  point.lng
+                ]);
+
+            }
+          }
+        }
+      );
+
+
+    msg(
+      "تم تشغيل تتبع موقعك للعميل 📍",
+      "success"
+    );
+
+
+    return true;
+
+  } catch (error) {
+
+    console.error(
+      "START CAPTAIN TRACKING ERROR:",
+      error
+    );
+
+
+    msg(
+      "تعذر تشغيل تتبع موقعك. تأكد من تشغيل GPS والسماح للتطبيق بالموقع.",
+      "error"
+    );
+
+
+    return false;
+  }
+}
+
+
+/* =========================================================
+   STOP CAPTAIN LIVE LOCATION
+   ========================================================= */
+
+async function stopCaptainLocationTracking() {
+
+  if (
+    captainLocationWatchId !== null
+  ) {
+
+    try {
+
+      await Geolocation.clearWatch({
+        id:
+          captainLocationWatchId
+      });
+
+    } catch (error) {
+
+      console.error(
+        "CLEAR LOCATION WATCH ERROR:",
+        error
+      );
+    }
+
+
+    captainLocationWatchId =
+      null;
+  }
+
+
+  activeTrackingRideId =
+    null;
 }
 
 
@@ -1940,6 +2904,10 @@ $("#request").onclick =
             customerPhoto:
               profile.photoURL || "",
 
+            customerPhone:
+              profile.phone ||
+              "",
+
             fromPlace,
 
             toPlace,
@@ -1951,6 +2919,15 @@ $("#request").onclick =
               destination,
 
             price,
+
+            originalPrice:
+              price,
+
+            offeredPrice:
+              null,
+
+            agreedPrice:
+              null,
 
             passengers:
               Number($("#passengers").value),
@@ -2249,13 +3226,6 @@ async function uploadProfilePhoto(
     }
   );
 
-
-  /*
-    مهم جداً:
-    هنا تم إغلاق دالة رفع الصورة.
-    كود إنشاء الحساب وتسجيل الدخول
-    أصبح خارجها ويعمل عند تشغيل التطبيق.
-  */
 
   return await getDownloadURL(
     storageRef
@@ -3177,6 +4147,11 @@ function customerCard(ride) {
   }
 
 
+  const finalPrice =
+    ride.agreedPrice ??
+    ride.price;
+
+
   return `
 
     <div class="card">
@@ -3228,12 +4203,68 @@ function customerCard(ride) {
 
       <p>
         💰
-        ${ride.price}
+        ${finalPrice}
         جنيه
         •
         👥
         ${ride.passengers}
       </p>
+
+
+      ${
+        ride.status === "price_offered"
+          ? `
+            <div
+              class="contact-box"
+              style="margin-top:12px"
+            >
+
+              <strong>
+                💰 الكابتن اقترح سعر جديد
+              </strong>
+
+              <br>
+
+              السعر الذي اقترحته أنت:
+              <strong>
+                ${Number(
+                  ride.originalPrice ??
+                  ride.price ??
+                  0
+                )}
+                جنيه
+              </strong>
+
+              <br>
+
+              سعر الكابتن:
+              <strong>
+                ${Number(
+                  ride.offeredPrice || 0
+                )}
+                جنيه
+              </strong>
+
+            </div>
+
+
+            <button
+              class="btn green"
+              data-accept-offer="${ride.id}"
+            >
+              ✅ موافقة على سعر الكابتن
+            </button>
+
+
+            <button
+              class="btn danger"
+              data-reject-offer="${ride.id}"
+            >
+              ❌ رفض السعر
+            </button>
+          `
+          : ""
+      }
 
 
       <p>
@@ -3275,14 +4306,42 @@ function customerCard(ride) {
 
 
       ${
+        ride.status ===
+          "captain_to_customer" ||
+        ride.status === "arrived" ||
+        ride.status === "started"
+          ? `
+            <button
+              class="btn primary"
+              data-track-customer="${ride.id}"
+            >
+              📍 متابعة الكابتن على الخريطة
+            </button>
+          `
+          : ""
+      }
+
+
+      ${
         ride.status === "started"
           ? `
             <button
               class="btn green"
               data-complete-customer="${ride.id}"
             >
-              ✅ انتهت الرحلة
+              🏁 إنهاء الرحلة
             </button>
+          `
+          : ""
+      }
+
+
+      ${
+        ride.status === "completed"
+          ? `
+            <div class="status">
+              ✅ الرحلة انتهت بنجاح
+            </div>
           `
           : ""
       }
@@ -3373,25 +4432,444 @@ async function loadCustomerRides() {
           .forEach((button) => {
 
             button.onclick =
-              () =>
-                updateDoc(
-                  doc(
-                    db,
-                    "rides",
-                    button.dataset
-                      .completeCustomer
-                  ),
-                  {
-                    status:
-                      "completed",
+              async () => {
 
-                    completedAt:
-                      serverTimestamp()
-                  }
+                try {
+
+                  await updateDoc(
+                    doc(
+                      db,
+                      "rides",
+                      button.dataset
+                        .completeCustomer
+                    ),
+                    {
+                      status:
+                        "completed",
+
+                      completedAt:
+                        serverTimestamp(),
+
+                      updatedAt:
+                        serverTimestamp()
+                    }
+                  );
+
+
+                  msg(
+                    "تم إنهاء الرحلة بنجاح 🏁",
+                    "success"
+                  );
+
+                } catch (error) {
+
+                  console.error(
+                    error
+                  );
+
+                  msg(
+                    "تعذر إنهاء الرحلة.",
+                    "error"
+                  );
+                }
+              };
+          });
+
+
+        document
+          .querySelectorAll(
+            "[data-accept-offer]"
+          )
+          .forEach((button) => {
+
+            button.onclick =
+              () =>
+                acceptCaptainOffer(
+                  button.dataset
+                    .acceptOffer
+                );
+          });
+
+
+        document
+          .querySelectorAll(
+            "[data-reject-offer]"
+          )
+          .forEach((button) => {
+
+            button.onclick =
+              () =>
+                rejectCaptainOffer(
+                  button.dataset
+                    .rejectOffer
+                );
+          });
+
+
+        document
+          .querySelectorAll(
+            "[data-track-customer]"
+          )
+          .forEach((button) => {
+
+            button.onclick =
+              () =>
+                openCustomerTrackingById(
+                  button.dataset
+                    .trackCustomer
                 );
           });
       }
     );
+}
+
+
+/* =========================================================
+   ACCEPT CAPTAIN PRICE OFFER
+   ========================================================= */
+
+async function acceptCaptainOffer(id) {
+
+  if (
+    !user ||
+    profile?.role !== "customer"
+  ) {
+    return;
+  }
+
+
+  try {
+
+    await runTransaction(
+      db,
+      async (transaction) => {
+
+        const rideRef =
+          doc(
+            db,
+            "rides",
+            id
+          );
+
+
+        const snapshot =
+          await transaction.get(
+            rideRef
+          );
+
+
+        if (!snapshot.exists()) {
+
+          throw Error(
+            "الرحلة غير موجودة."
+          );
+        }
+
+
+        const ride =
+          snapshot.data();
+
+
+        if (
+          ride.customerId !==
+          user.uid
+        ) {
+
+          throw Error(
+            "هذه الرحلة ليست ملكك."
+          );
+        }
+
+
+        if (
+          ride.status !==
+          "price_offered"
+        ) {
+
+          throw Error(
+            "عرض السعر لم يعد متاحاً."
+          );
+        }
+
+
+        const offeredPrice =
+          Number(
+            ride.offeredPrice
+          );
+
+
+        if (
+          !offeredPrice ||
+          offeredPrice <= 0
+        ) {
+
+          throw Error(
+            "سعر الكابتن غير صحيح."
+          );
+        }
+
+
+        transaction.update(
+          rideRef,
+          {
+
+            status:
+              "accepted",
+
+            price:
+              offeredPrice,
+
+            agreedPrice:
+              offeredPrice,
+
+            customerAcceptedOfferAt:
+              serverTimestamp(),
+
+            acceptedAt:
+              serverTimestamp(),
+
+            updatedAt:
+              serverTimestamp()
+          }
+        );
+      }
+    );
+
+
+    msg(
+      "تم قبول سعر الكابتن. الكابتن استلم الرحلة ✅",
+      "success"
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "ACCEPT CAPTAIN OFFER ERROR:",
+      error
+    );
+
+
+    msg(
+      error.message ||
+        "تعذر قبول السعر.",
+      "error"
+    );
+  }
+}
+
+
+/* =========================================================
+   REJECT CAPTAIN PRICE OFFER
+   ========================================================= */
+
+async function rejectCaptainOffer(id) {
+
+  if (
+    !user ||
+    profile?.role !== "customer"
+  ) {
+    return;
+  }
+
+
+  try {
+
+    await runTransaction(
+      db,
+      async (transaction) => {
+
+        const rideRef =
+          doc(
+            db,
+            "rides",
+            id
+          );
+
+
+        const snapshot =
+          await transaction.get(
+            rideRef
+          );
+
+
+        if (!snapshot.exists()) {
+
+          throw Error(
+            "الرحلة غير موجودة."
+          );
+        }
+
+
+        const ride =
+          snapshot.data();
+
+
+        if (
+          ride.customerId !==
+          user.uid
+        ) {
+
+          throw Error(
+            "هذه الرحلة ليست ملكك."
+          );
+        }
+
+
+        if (
+          ride.status !==
+          "price_offered"
+        ) {
+
+          throw Error(
+            "عرض السعر لم يعد متاحاً."
+          );
+        }
+
+
+        transaction.update(
+          rideRef,
+          {
+
+            status:
+              "open",
+
+            price:
+              Number(
+                ride.originalPrice ??
+                ride.price ??
+                0
+              ),
+
+            offeredPrice:
+              null,
+
+            agreedPrice:
+              null,
+
+            captainId:
+              "",
+
+            captainName:
+              "",
+
+            captainPhoto:
+              "",
+
+            captainPhone:
+              "",
+
+            captainCarType:
+              "",
+
+            captainCarModel:
+              "",
+
+            captainPlateNumber:
+              "",
+
+            priceOfferRejectedAt:
+              serverTimestamp(),
+
+            updatedAt:
+              serverTimestamp()
+          }
+        );
+      }
+    );
+
+
+    msg(
+      "تم رفض السعر وإعادة الرحلة للكباتن 🔄",
+      "success"
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "REJECT CAPTAIN OFFER ERROR:",
+      error
+    );
+
+
+    msg(
+      error.message ||
+        "تعذر رفض السعر.",
+      "error"
+    );
+  }
+}
+
+
+/* =========================================================
+   OPEN CUSTOMER TRACKING BY ID
+   ========================================================= */
+
+async function openCustomerTrackingById(
+  rideId
+) {
+
+  try {
+
+    const snapshot =
+      await getDoc(
+        doc(
+          db,
+          "rides",
+          rideId
+        )
+      );
+
+
+    if (!snapshot.exists()) {
+
+      msg(
+        "الرحلة غير موجودة.",
+        "error"
+      );
+
+      return;
+    }
+
+
+    const ride = {
+      id:
+        snapshot.id,
+
+      ...snapshot.data()
+    };
+
+
+    if (
+      ride.customerId !==
+      user.uid
+    ) {
+
+      msg(
+        "لا يمكنك متابعة هذه الرحلة.",
+        "error"
+      );
+
+      return;
+    }
+
+
+    openTracking(ride);
+
+  } catch (error) {
+
+    console.error(
+      "OPEN CUSTOMER TRACKING ERROR:",
+      error
+    );
+
+
+    msg(
+      "تعذر فتح خريطة التتبع.",
+      "error"
+    );
+  }
 }
 
 
@@ -3463,6 +4941,12 @@ async function loadCaptain() {
                       item.data();
 
 
+                    const ridePrice =
+                      Number(
+                        ride.price || 0
+                      );
+
+
                     return `
 
                       <div class="card">
@@ -3516,7 +5000,7 @@ async function loadCaptain() {
 
                         <p>
                           💰
-                          ${ride.price}
+                          ${ridePrice}
                           جنيه
                           •
                           👥
@@ -3563,7 +5047,15 @@ async function loadCaptain() {
                           class="btn green"
                           data-accept="${item.id}"
                         >
-                          ✅ قبول الرحلة
+                          ✅ قبول بسعر ${ridePrice} جنيه
+                        </button>
+
+
+                        <button
+                          class="btn outline"
+                          data-offer-price="${item.id}"
+                        >
+                          💰 اقتراح سعر آخر
                         </button>
 
                       </div>
@@ -3590,6 +5082,21 @@ async function loadCaptain() {
               () =>
                 acceptRide(
                   button.dataset.accept
+                );
+          });
+
+
+        document
+          .querySelectorAll(
+            "[data-offer-price]"
+          )
+          .forEach((button) => {
+
+            button.onclick =
+              () =>
+                offerRidePrice(
+                  button.dataset
+                    .offerPrice
                 );
           });
       }
@@ -3630,6 +5137,11 @@ async function loadCaptain() {
 
                     const ride =
                       item.data();
+
+
+                    const finalPrice =
+                      ride.agreedPrice ??
+                      ride.price;
 
 
                     return `
@@ -3687,12 +5199,50 @@ async function loadCaptain() {
 
                         <p>
                           💰
-                          ${ride.price}
+                          ${finalPrice}
                           جنيه
                           •
                           👥
                           ${ride.passengers}
                         </p>
+
+
+                        ${
+                          ride.status ===
+                          "price_offered"
+
+                            ? `
+                              <div class="contact-box">
+
+                                ⏳ في انتظار رد العميل على السعر
+
+                                <br>
+
+                                السعر الأصلي:
+                                <strong>
+                                  ${Number(
+                                    ride.originalPrice ??
+                                    ride.price ??
+                                    0
+                                  )}
+                                  جنيه
+                                </strong>
+
+                                <br>
+
+                                سعرك المقترح:
+                                <strong>
+                                  ${Number(
+                                    ride.offeredPrice ||
+                                    0
+                                  )}
+                                  جنيه
+                                </strong>
+
+                              </div>
+                            `
+                            : ""
+                        }
 
 
                         <p>
@@ -3731,7 +5281,19 @@ async function loadCaptain() {
 
 
                         ${
-                          ride.customerPhone
+                          ride.customerPhone &&
+                          (
+                            ride.status ===
+                              "accepted" ||
+                            ride.status ===
+                              "captain_to_customer" ||
+                            ride.status ===
+                              "arrived" ||
+                            ride.status ===
+                              "started" ||
+                            ride.status ===
+                              "completed"
+                          )
                             ? `
                               <div class="contact-box">
 
@@ -3782,12 +5344,21 @@ async function loadCaptain() {
                           "captain_to_customer"
 
                             ? `
+
+                              <button
+                                class="btn primary"
+                                data-track-captain="${item.id}"
+                              >
+                                📍 متابعة الخريطة
+                              </button>
+
                               <button
                                 class="btn green"
                                 data-arrived="${item.id}"
                               >
                                 📍 وصلت للعميل
                               </button>
+
                             `
 
                             : ""
@@ -3799,12 +5370,21 @@ async function loadCaptain() {
                           "arrived"
 
                             ? `
+
                               <button
                                 class="btn primary"
+                                data-track-captain="${item.id}"
+                              >
+                                📍 فتح الخريطة
+                              </button>
+
+                              <button
+                                class="btn green"
                                 data-start="${item.id}"
                               >
                                 ▶️ بدء الرحلة
                               </button>
+
                             `
 
                             : ""
@@ -3816,14 +5396,36 @@ async function loadCaptain() {
                           "started"
 
                             ? `
+
+                              <button
+                                class="btn primary"
+                                data-track-captain="${item.id}"
+                              >
+                                🗺️ متابعة الرحلة
+                              </button>
+
                               <button
                                 class="btn green"
                                 data-complete="${item.id}"
                               >
                                 🏁 إنهاء الرحلة
                               </button>
+
                             `
 
+                            : ""
+                        }
+
+
+                        ${
+                          ride.status ===
+                          "completed"
+
+                            ? `
+                              <div class="status">
+                                ✅ تم إنهاء الرحلة
+                              </div>
+                            `
                             : ""
                         }
 
@@ -3848,6 +5450,179 @@ async function loadCaptain() {
 
 
 /* =========================================================
+   OFFER NEW PRICE
+   ========================================================= */
+
+async function offerRidePrice(id) {
+
+  if (
+    !user ||
+    profile?.role !== "captain"
+  ) {
+    return;
+  }
+
+
+  const value =
+    window.prompt(
+      "اكتب السعر الجديد الذي تريد عرضه على العميل:"
+    );
+
+
+  if (
+    value === null
+  ) {
+    return;
+  }
+
+
+  const newPrice =
+    Number(
+      String(value).replace(
+        /,/g,
+        "."
+      )
+    );
+
+
+  if (
+    !Number.isFinite(newPrice) ||
+    newPrice <= 0
+  ) {
+
+    msg(
+      "اكتب سعر صحيح أكبر من صفر.",
+      "error"
+    );
+
+    return;
+  }
+
+
+  try {
+
+    await runTransaction(
+      db,
+      async (transaction) => {
+
+        const rideRef =
+          doc(
+            db,
+            "rides",
+            id
+          );
+
+
+        const snapshot =
+          await transaction.get(
+            rideRef
+          );
+
+
+        if (!snapshot.exists()) {
+
+          throw Error(
+            "الرحلة غير موجودة."
+          );
+        }
+
+
+        const ride =
+          snapshot.data();
+
+
+        if (
+          ride.status !==
+          "open"
+        ) {
+
+          throw Error(
+            "الرحلة تم قبولها أو تعديلها بالفعل."
+          );
+        }
+
+
+        transaction.update(
+          rideRef,
+          {
+
+            status:
+              "price_offered",
+
+            originalPrice:
+              Number(
+                ride.originalPrice ??
+                ride.price ??
+                0
+              ),
+
+            offeredPrice:
+              newPrice,
+
+            agreedPrice:
+              null,
+
+            captainId:
+              user.uid,
+
+            captainName:
+              profile.name || "",
+
+            captainPhoto:
+              profile.photoURL || "",
+
+            captainPhone:
+              profile.phone ||
+              user.phoneNumber ||
+              "",
+
+            captainCarType:
+              profile.carType ||
+              "",
+
+            captainCarModel:
+              profile.carModel ||
+              "",
+
+            captainPlateNumber:
+              profile.plateNumber ||
+              "",
+
+            priceOfferAt:
+              serverTimestamp(),
+
+            updatedAt:
+              serverTimestamp()
+          }
+        );
+      }
+    );
+
+
+    msg(
+      `تم إرسال عرضك للعميل بسعر ${newPrice} جنيه 💰`,
+      "success"
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "OFFER PRICE ERROR:",
+      error
+    );
+
+
+    msg(
+      error.message ||
+        "تعذر إرسال السعر الجديد.",
+      "error"
+    );
+  }
+}
+
+
+/* =========================================================
    CAPTAIN ACTIONS
    ========================================================= */
 
@@ -3860,22 +5635,145 @@ function bindCaptainActions() {
     .forEach((button) => {
 
       button.onclick =
-        () =>
-          updateDoc(
-            doc(
-              db,
-              "rides",
-              button.dataset
-                .customerRoute
-            ),
-            {
-              status:
-                "captain_to_customer",
+        async () => {
 
-              updatedAt:
-                serverTimestamp()
+          const rideId =
+            button.dataset
+              .customerRoute;
+
+
+          try {
+
+            const trackingStarted =
+              await startCaptainLocationTracking(
+                rideId
+              );
+
+
+            if (!trackingStarted) {
+              return;
             }
-          );
+
+
+            await updateDoc(
+              doc(
+                db,
+                "rides",
+                rideId
+              ),
+              {
+
+                status:
+                  "captain_to_customer",
+
+                captainLocationStartedAt:
+                  serverTimestamp(),
+
+                updatedAt:
+                  serverTimestamp()
+              }
+            );
+
+
+            msg(
+              "أنت الآن في الطريق للعميل 🚗📍",
+              "success"
+            );
+
+
+            const snapshot =
+              await getDoc(
+                doc(
+                  db,
+                  "rides",
+                  rideId
+                )
+              );
+
+
+            if (snapshot.exists()) {
+
+              openTracking({
+                id:
+                  snapshot.id,
+
+                ...snapshot.data()
+              });
+            }
+
+          } catch (error) {
+
+            console.error(
+              "START TO CUSTOMER ERROR:",
+              error
+            );
+
+
+            msg(
+              "تعذر بدء التوجه للعميل.",
+              "error"
+            );
+          }
+        };
+    });
+
+
+  document
+    .querySelectorAll(
+      "[data-track-captain]"
+    )
+    .forEach((button) => {
+
+      button.onclick =
+        async () => {
+
+          const rideId =
+            button.dataset
+              .trackCaptain;
+
+
+          try {
+
+            const snapshot =
+              await getDoc(
+                doc(
+                  db,
+                  "rides",
+                  rideId
+                )
+              );
+
+
+            if (!snapshot.exists()) {
+
+              msg(
+                "الرحلة غير موجودة.",
+                "error"
+              );
+
+              return;
+            }
+
+
+            openTracking({
+              id:
+                snapshot.id,
+
+              ...snapshot.data()
+            });
+
+          } catch (error) {
+
+            console.error(
+              error
+            );
+
+            msg(
+              "تعذر فتح خريطة الرحلة.",
+              "error"
+            );
+          }
+        };
     });
 
 
@@ -3886,21 +5784,91 @@ function bindCaptainActions() {
     .forEach((button) => {
 
       button.onclick =
-        () =>
-          updateDoc(
-            doc(
-              db,
-              "rides",
-              button.dataset.arrived
-            ),
-            {
-              status:
-                "arrived",
+        async () => {
 
-              updatedAt:
-                serverTimestamp()
+          const rideId =
+            button.dataset
+              .arrived;
+
+
+          try {
+
+            let currentLocation =
+              null;
+
+
+            try {
+
+              const point =
+                await exactLocation();
+
+
+              currentLocation = {
+
+                lat:
+                  point.lat,
+
+                lng:
+                  point.lng
+              };
+
+            } catch (locationError) {
+
+              console.warn(
+                "ARRIVED GPS ERROR:",
+                locationError
+              );
             }
-          );
+
+
+            await updateDoc(
+              doc(
+                db,
+                "rides",
+                rideId
+              ),
+              {
+
+                status:
+                  "arrived",
+
+                ...(currentLocation
+                  ? {
+                      captainLocation:
+                        currentLocation
+                    }
+                  : {}),
+
+                arrivedAt:
+                  serverTimestamp(),
+
+                updatedAt:
+                  serverTimestamp()
+              }
+            );
+
+
+            await stopCaptainLocationTracking();
+
+
+            msg(
+              "تم تسجيل وصولك للعميل 📍",
+              "success"
+            );
+
+          } catch (error) {
+
+            console.error(
+              "ARRIVED ERROR:",
+              error
+            );
+
+            msg(
+              "تعذر تسجيل الوصول.",
+              "error"
+            );
+          }
+        };
     });
 
 
@@ -3911,21 +5879,86 @@ function bindCaptainActions() {
     .forEach((button) => {
 
       button.onclick =
-        () =>
-          updateDoc(
-            doc(
-              db,
-              "rides",
-              button.dataset.start
-            ),
-            {
-              status:
-                "started",
+        async () => {
 
-              startedAt:
-                serverTimestamp()
+          const rideId =
+            button.dataset
+              .start;
+
+
+          try {
+
+            const trackingStarted =
+              await startCaptainLocationTracking(
+                rideId
+              );
+
+
+            if (!trackingStarted) {
+              return;
             }
-          );
+
+
+            await updateDoc(
+              doc(
+                db,
+                "rides",
+                rideId
+              ),
+              {
+
+                status:
+                  "started",
+
+                startedAt:
+                  serverTimestamp(),
+
+                updatedAt:
+                  serverTimestamp()
+              }
+            );
+
+
+            msg(
+              "بدأت الرحلة إلى الوجهة 🛣️",
+              "success"
+            );
+
+
+            const snapshot =
+              await getDoc(
+                doc(
+                  db,
+                  "rides",
+                  rideId
+                )
+              );
+
+
+            if (snapshot.exists()) {
+
+              openTracking({
+                id:
+                  snapshot.id,
+
+                ...snapshot.data()
+              });
+            }
+
+          } catch (error) {
+
+            console.error(
+              "START RIDE ERROR:",
+              error
+            );
+
+
+            msg(
+              "تعذر بدء الرحلة.",
+              "error"
+            );
+          }
+        };
     });
 
 
@@ -3936,21 +5969,63 @@ function bindCaptainActions() {
     .forEach((button) => {
 
       button.onclick =
-        () =>
-          updateDoc(
-            doc(
-              db,
-              "rides",
-              button.dataset.complete
-            ),
-            {
-              status:
-                "completed",
+        async () => {
 
-              completedAt:
-                serverTimestamp()
+          const rideId =
+            button.dataset
+              .complete;
+
+
+          try {
+
+            await updateDoc(
+              doc(
+                db,
+                "rides",
+                rideId
+              ),
+              {
+
+                status:
+                  "completed",
+
+                completedAt:
+                  serverTimestamp(),
+
+                updatedAt:
+                  serverTimestamp()
+              }
+            );
+
+
+            if (
+              activeTrackingRideId ===
+              rideId
+            ) {
+
+              await stopCaptainLocationTracking();
             }
-          );
+
+
+            msg(
+              "تم إنهاء الرحلة بنجاح 🏁",
+              "success"
+            );
+
+          } catch (error) {
+
+            console.error(
+              "COMPLETE RIDE ERROR:",
+              error
+            );
+
+
+            msg(
+              "تعذر إنهاء الرحلة.",
+              "error"
+            );
+          }
+        };
     });
 }
 
@@ -4001,6 +6076,10 @@ async function acceptRide(id) {
         }
 
 
+        const ride =
+          snapshot.data();
+
+
         transaction.update(
           rideRef,
           {
@@ -4033,6 +6112,18 @@ async function acceptRide(id) {
             captainPlateNumber:
               profile.plateNumber ||
               "",
+
+            originalPrice:
+              Number(
+                ride.originalPrice ??
+                ride.price ??
+                0
+              ),
+
+            agreedPrice:
+              Number(
+                ride.price || 0
+              ),
 
             acceptedAt:
               serverTimestamp(),
@@ -4239,6 +6330,18 @@ $("#logout").onclick =
     }
 
 
+    if (trackingRideUnsubscribe) {
+
+      trackingRideUnsubscribe();
+
+      trackingRideUnsubscribe =
+        null;
+    }
+
+
+    await stopCaptainLocationTracking();
+
+
     await signOut(auth);
 
 
@@ -4249,6 +6352,8 @@ $("#logout").onclick =
     pickup = null;
 
     destination = null;
+
+    activeTrackingRideId = null;
 
     screen("login");
   };
@@ -4271,6 +6376,18 @@ onAuthStateChanged(
 
 
     if (!firebaseUser) {
+
+      await stopCaptainLocationTracking();
+
+
+      if (trackingRideUnsubscribe) {
+
+        trackingRideUnsubscribe();
+
+        trackingRideUnsubscribe =
+          null;
+      }
+
 
       profile = null;
 
