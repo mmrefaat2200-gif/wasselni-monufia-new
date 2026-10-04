@@ -1,37 +1,37 @@
 /* =========================================================
-   وصلني المنوفية
-   Professional Mobile UI
+   وصلني المنوفية — Modern Mobile UI
    ========================================================= */
 
 :root {
-  --navy: #092d4b;
-  --navy-2: #0d3d63;
   --blue: #0878df;
-  --blue-2: #0869c4;
-  --blue-light: #eaf5ff;
-  --green: #20a65a;
-  --green-2: #168d49;
-  --green-light: #eaf9f0;
+  --blue2: #0867c1;
+  --blue3: #eaf5ff;
 
-  --bg: #f3f7fa;
+  --navy: #082f50;
+  --navy2: #0d456d;
+
+  --green: #20a65a;
+  --green2: #168d49;
+  --green3: #eaf9f0;
+
+  --bg: #f4f8fb;
   --surface: #ffffff;
-  --surface-2: #f7fafc;
+  --surface2: #f8fbfd;
 
   --text: #172b3a;
   --muted: #71808d;
   --border: #dfe8ee;
 
   --danger: #d93636;
-  --danger-bg: #fff1f1;
+  --dangerbg: #fff1f1;
 
-  --shadow-sm: 0 4px 14px rgba(9, 45, 75, 0.06);
-  --shadow-md: 0 8px 25px rgba(9, 45, 75, 0.09);
-  --shadow-lg: 0 14px 40px rgba(9, 45, 75, 0.12);
+  --shadow: 0 8px 25px rgba(9,45,75,.09);
+  --shadow2: 0 14px 40px rgba(9,45,75,.12);
 
-  --radius-sm: 10px;
-  --radius-md: 15px;
-  --radius-lg: 20px;
-  --radius-xl: 26px;
+  --r1: 12px;
+  --r2: 16px;
+  --r3: 21px;
+  --r4: 28px;
 }
 
 /* =========================================================
@@ -44,25 +44,21 @@
   padding: 0;
 }
 
-html {
+html,
+body,
+#app {
   width: 100%;
   min-height: 100%;
-  background: #e9eff4;
-  -webkit-text-size-adjust: 100%;
+  background: var(--bg);
 }
 
 body {
-  width: 100%;
-  min-height: 100vh;
-  background: #e9eff4;
   color: var(--text);
-  font-family:
-    Arial,
-    "Tahoma",
-    sans-serif;
+  font-family: Arial, Tahoma, sans-serif;
   direction: rtl;
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
 }
 
 body,
@@ -70,10 +66,7 @@ button,
 input,
 textarea,
 select {
-  font-family:
-    Arial,
-    "Tahoma",
-    sans-serif;
+  font-family: Arial, Tahoma, sans-serif;
 }
 
 button,
@@ -89,7 +82,7 @@ button {
 }
 
 button:disabled {
-  opacity: 0.55;
+  opacity: .55;
   cursor: not-allowed;
 }
 
@@ -103,345 +96,280 @@ a {
   text-decoration: none;
 }
 
-#app {
+/* =========================================================
+   APP
+   ========================================================= */
+
+.app,
+.page-container {
   width: 100%;
   min-height: 100vh;
 }
 
-/* =========================================================
-   MAIN APP CONTAINER
-   ========================================================= */
-
 .page-container {
-  width: 100%;
   max-width: 560px;
-  min-height: 100vh;
-  margin: 0 auto;
-  padding: 0 16px 32px;
+  margin: auto;
+  padding: 0 15px 95px;
 
   background:
-    radial-gradient(
-      circle at 100% 0%,
-      rgba(8, 120, 223, 0.08),
-      transparent 28%
-    ),
     linear-gradient(
       180deg,
-      #f8fbfd 0%,
-      #f3f7fa 100%
+      #f9fcfe,
+      #f3f7fa
     );
 }
 
 /* =========================================================
-   HOME / LANDING
+   SCREENS
    ========================================================= */
 
-.brand {
-  position: relative;
-  text-align: center;
-  padding: 58px 18px 30px;
+.screen {
+  display: none !important;
+  width: 100%;
 }
 
-.brand::before {
-  content: "🚕";
-  width: 76px;
-  height: 76px;
+.screen.active {
+  display: block !important;
+}
+
+#login.screen.active,
+#register.screen.active {
+  min-height: 100vh;
+  padding-bottom: 25px;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 5000;
+
+  width: 100%;
+  max-width: 560px;
+
+  min-height: 68px;
+
+  margin: 0 auto;
 
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
 
-  margin: 0 auto 18px;
+  padding: 8px 15px;
 
-  border-radius: 24px;
+  background: rgba(255,255,255,.97);
 
-  background:
-    linear-gradient(
-      145deg,
-      rgba(8, 120, 223, 0.12),
-      rgba(32, 166, 90, 0.12)
-    );
-
-  border: 1px solid rgba(8, 120, 223, 0.10);
-
-  font-size: 38px;
+  border-bottom: 1px solid var(--border);
 
   box-shadow:
-    0 12px 30px rgba(8, 120, 223, 0.10);
+    0 5px 18px rgba(9,45,75,.06);
+
+  backdrop-filter: blur(10px);
+}
+
+/* اللوجو داخل التطبيق */
+
+.logo {
+  width: 178px;
+  height: 54px;
+
+  background:
+    url("/wasselni-logo.png")
+    center /
+    contain
+    no-repeat;
+
+  color: transparent !important;
+  font-size: 0 !important;
+
+  display: block;
+}
+
+.logo span {
+  display: none;
+}
+
+.icon-button {
+  width: 45px;
+  height: 45px;
+
+  border-radius: 50%;
+
+  background: var(--blue3);
+
+  color: var(--blue);
+
+  font-size: 20px;
+
+  border: 2px solid #d9edff;
+}
+
+/* =========================================================
+   BRAND / HOME
+   ========================================================= */
+
+.brand {
+  text-align: center;
+  padding: 40px 12px 25px;
+}
+
+.brand::before {
+  content: "";
+
+  display: block;
+
+  width: 92px;
+  height: 92px;
+
+  margin: 0 auto 14px;
+
+  border-radius: 28px;
+
+  background:
+    url("/wasselni-logo.png")
+    center /
+    cover
+    no-repeat;
+
+  box-shadow:
+    0 12px 30px rgba(8,120,223,.15);
 }
 
 .brand h1 {
   color: var(--navy);
+
   font-size: 30px;
   font-weight: 900;
-  line-height: 1.25;
-  margin-bottom: 8px;
+
+  line-height: 1.3;
+
+  margin-bottom: 7px;
 }
 
 .brand p {
   color: var(--muted);
+
   font-size: 14px;
-  line-height: 1.7;
+
+  line-height: 1.8;
+}
+
+/* =========================================================
+   AUTH LOGO
+   ========================================================= */
+
+.auth-logo {
+  width: 88px;
+  height: 88px;
+
+  margin: 0 auto 15px;
+
+  border-radius: 27px;
+
+  background:
+    url("/wasselni-logo.png")
+    center /
+    cover
+    no-repeat;
+
+  box-shadow:
+    0 10px 25px rgba(8,120,223,.13);
+
+  font-size: 0;
+  color: transparent;
+}
+
+/* =========================================================
+   CARDS
+   ========================================================= */
+
+.card,
+.home-card,
+.auth-card,
+.trip-card,
+.profile-card {
+  width: 100%;
+
+  background: var(--surface);
+
+  border: 1px solid var(--border);
+
+  border-radius: var(--r4);
+
+  padding: 19px 17px;
+
+  margin-bottom: 15px;
+
+  box-shadow: var(--shadow);
 }
 
 .home-card {
-  width: 100%;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  padding: 24px 18px;
-
-  box-shadow: var(--shadow-lg);
+  padding: 23px 18px;
 }
 
 .home-card h3 {
+  text-align: center;
+
   color: var(--navy);
+
   font-size: 18px;
   font-weight: 900;
-  margin-bottom: 18px;
-  text-align: center;
+
+  margin-bottom: 17px;
 }
 
 .home-card h3::after {
   content: "";
+
   display: block;
-  width: 42px;
+
+  width: 44px;
   height: 3px;
-  border-radius: 20px;
+
+  border-radius: 9px;
+
   margin: 9px auto 0;
+
   background: var(--blue);
 }
 
-/* =========================================================
-   BUTTONS
-   ========================================================= */
-
-.primary-btn,
-.secondary-btn,
-.danger-btn,
-.link-btn,
-.back-btn,
-.location-btn,
-.map-select-btn {
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.primary-btn:active,
-.secondary-btn:active,
-.danger-btn:active,
-.location-btn:active,
-.map-select-btn:active {
-  transform: scale(0.985);
-}
-
-/* Main blue button */
-
-.primary-btn {
-  width: 100%;
-  min-height: 52px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 14px;
-
-  background:
-    linear-gradient(
-      135deg,
-      var(--blue),
-      var(--blue-2)
-    );
-
-  color: white;
-
-  font-size: 15px;
-  font-weight: 800;
-
-  margin-top: 10px;
-
-  box-shadow:
-    0 7px 18px rgba(8, 120, 223, 0.20);
-}
-
-.primary-btn:hover {
-  box-shadow:
-    0 9px 23px rgba(8, 120, 223, 0.26);
-}
-
-/* Secondary */
-
-.secondary-btn {
-  width: 100%;
-  min-height: 50px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 14px;
-
-  background: #eef5fa;
-  border: 1px solid #dfeaf1;
-
-  color: var(--navy);
-
-  font-size: 15px;
-  font-weight: 800;
-
-  margin-top: 10px;
-}
-
-.secondary-btn:hover {
-  background: #e7f1f8;
-}
-
-/* Danger */
-
-.danger-btn {
-  width: 100%;
-  min-height: 50px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 14px;
-
-  background: var(--danger-bg);
-  border: 1px solid #ffdada;
-
-  color: var(--danger);
-
-  font-size: 15px;
-  font-weight: 800;
-
-  margin-top: 10px;
-}
-
-/* Large */
-
-.big-btn {
-  min-height: 58px;
-  font-size: 16px;
-}
-
-/* Link */
-
-.link-btn {
-  width: 100%;
-  background: transparent;
-  color: var(--blue);
-  min-height: 42px;
-  margin-top: 8px;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-/* Back */
-
-.back-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  min-height: 44px;
-
-  background: transparent;
-  color: var(--blue);
-
-  font-size: 15px;
-  font-weight: 800;
-
-  padding: 7px 0;
-
-  margin-top: 7px;
-}
-
-/* =========================================================
-   AUTH
-   ========================================================= */
-
 .auth-card {
-  width: 100%;
-  margin: 8px auto 0;
+  max-width: 540px;
 
-  background: white;
-
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  margin: 10px auto 0;
 
   padding: 24px 18px;
 
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow2);
 }
 
+.auth-card h1,
 .auth-card h2 {
   text-align: center;
+
   color: var(--navy);
-  font-size: 24px;
+
+  font-size: 25px;
+
   font-weight: 900;
-  margin-bottom: 20px;
+
+  margin-bottom: 8px;
 }
 
-.role-switch {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.auth-card label,
+.card label {
+  display: block;
 
-  padding: 4px;
+  color: #304452;
 
-  border-radius: 14px;
+  font-size: 13px;
 
-  background: #edf4f8;
-
-  margin-bottom: 12px;
-}
-
-.role-switch button {
-  min-height: 46px;
-  border-radius: 11px;
-
-  background: transparent;
-
-  color: #657583;
-
-  font-size: 14px;
   font-weight: 800;
-}
 
-.role-switch button.active {
-  color: white;
-
-  background:
-    linear-gradient(
-      135deg,
-      var(--blue),
-      var(--blue-2)
-    );
-
-  box-shadow:
-    0 5px 14px rgba(8, 120, 223, 0.18);
-}
-
-.selected-role-text {
-  text-align: center;
-
-  padding: 10px 12px;
-
-  border-radius: 11px;
-
-  background: var(--blue-light);
-  color: var(--blue);
-
-  font-size: 12px;
-  font-weight: 700;
-
-  margin-bottom: 18px;
+  margin: 12px 0 7px;
 }
 
 /* =========================================================
@@ -449,7 +377,7 @@ a {
    ========================================================= */
 
 .input-group {
-  margin-bottom: 15px;
+  margin-bottom: 14px;
 }
 
 .input-group label {
@@ -458,6 +386,7 @@ a {
   color: #304452;
 
   font-size: 13px;
+
   font-weight: 800;
 
   margin-bottom: 7px;
@@ -466,6 +395,11 @@ a {
 .input-group input,
 .input-group textarea,
 .input-group select,
+.auth-card input,
+.auth-card select,
+.card input,
+.card textarea,
+.card select,
 #phoneInput,
 #passwordInput,
 #nameInput,
@@ -478,53 +412,276 @@ a {
 #passengerCount,
 #tripNotes {
   width: 100%;
+
   min-height: 51px;
 
   border: 1px solid #d9e4eb;
-  border-radius: 13px;
 
-  background: #fafdff;
+  border-radius: 14px;
+
+  background: #fbfdff;
 
   color: var(--text);
 
   padding: 12px 13px;
 
-  font-size: 15px;
-
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
+    .2s;
 }
 
 .input-group input:focus,
 .input-group textarea:focus,
 .input-group select:focus,
-#phoneInput:focus,
-#passwordInput:focus,
-#nameInput:focus,
-#carTypeInput:focus,
-#carModelInput:focus,
-#carNumberInput:focus,
+.auth-card input:focus,
+.auth-card select:focus,
+.card input:focus,
+.card textarea:focus,
+.card select:focus,
 #proposedPrice:focus,
 #tripNotes:focus {
-  background: white;
+  background: #fff;
 
   border-color: var(--blue);
 
   box-shadow:
-    0 0 0 3px rgba(8, 120, 223, 0.10);
+    0 0 0 3px rgba(8,120,223,.1);
 }
 
 .input-group textarea,
+.card textarea,
 #tripNotes {
   min-height: 105px;
+
   resize: vertical;
+
   line-height: 1.7;
 }
 
-select {
-  appearance: auto;
+/* =========================================================
+   ROLE SWITCH
+   ========================================================= */
+
+.role-switch {
+  display: grid;
+
+  grid-template-columns: 1fr 1fr;
+
+  gap: 4px;
+
+  padding: 4px;
+
+  background: #edf4f8;
+
+  border-radius: 15px;
+
+  margin-bottom: 13px;
+}
+
+.role-switch button {
+  min-height: 46px;
+
+  border-radius: 12px;
+
+  background: transparent;
+
+  color: #657583;
+
+  font-weight: 800;
+}
+
+.role-switch button.active {
+  color: #fff;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--blue),
+      var(--blue2)
+    );
+
+  box-shadow:
+    0 5px 14px rgba(8,120,223,.18);
+}
+
+.selected-role-text {
+  padding: 10px;
+
+  border-radius: 12px;
+
+  background: var(--blue3);
+
+  color: var(--blue);
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  text-align: center;
+
+  margin-bottom: 15px;
+}
+
+/* =========================================================
+   BUTTONS
+   ========================================================= */
+
+.primary-btn,
+.secondary-btn,
+.danger-btn,
+.link-btn,
+.back-btn,
+.location-btn,
+.map-select-btn,
+.btn {
+  transition:
+    transform .15s,
+    box-shadow .15s,
+    background .15s;
+}
+
+.primary-btn:active,
+.secondary-btn:active,
+.danger-btn:active,
+.location-btn:active,
+.map-select-btn:active,
+.btn:active {
+  transform: scale(.985);
+}
+
+.primary-btn,
+.btn.primary {
+  width: 100%;
+
+  min-height: 52px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 15px;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--blue),
+      var(--blue2)
+    );
+
+  color: #fff;
+
+  font-size: 15px;
+
+  font-weight: 900;
+
+  margin-top: 9px;
+
+  box-shadow:
+    0 7px 18px rgba(8,120,223,.2);
+}
+
+.secondary-btn,
+.btn.outline {
+  width: 100%;
+
+  min-height: 50px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 15px;
+
+  background: #eef5fa;
+
+  border: 1px solid #dfeaf1;
+
+  color: var(--navy);
+
+  font-size: 15px;
+
+  font-weight: 800;
+
+  margin-top: 9px;
+}
+
+.danger-btn,
+.btn.danger {
+  width: 100%;
+
+  min-height: 50px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 15px;
+
+  background: var(--dangerbg);
+
+  border: 1px solid #ffdada;
+
+  color: var(--danger);
+
+  font-size: 15px;
+
+  font-weight: 800;
+
+  margin-top: 9px;
+}
+
+.btn.green {
+  background:
+    linear-gradient(
+      135deg,
+      var(--green),
+      var(--green2)
+    );
+
+  color: #fff;
+}
+
+.big-btn {
+  min-height: 58px;
+  font-size: 16px;
+}
+
+.link-btn {
+  width: 100%;
+
+  min-height: 42px;
+
+  background: transparent;
+
+  color: var(--blue);
+
+  font-weight: 800;
+
+  margin-top: 8px;
+}
+
+.back-btn {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  min-height: 44px;
+
+  background: transparent;
+
+  color: var(--blue);
+
+  font-weight: 800;
+
+  margin-top: 7px;
+}
+
+.small-btn {
+  width: auto;
+
+  min-width: 82px;
+
+  padding: 0 14px;
 }
 
 /* =========================================================
@@ -532,78 +689,83 @@ select {
    ========================================================= */
 
 .dashboard {
-  padding-bottom: 20px;
+  padding-bottom: 15px;
 }
 
 .dashboard-header {
   position: relative;
 
-  margin: 0 -16px 20px;
+  margin: 0 -15px 18px;
 
-  padding: 27px 20px 28px;
+  padding: 25px 19px 27px;
 
-  color: white;
+  color: #fff;
 
   background:
     radial-gradient(
-      circle at 90% 10%,
-      rgba(255,255,255,0.16),
-      transparent 32%
+      circle at 90% 5%,
+      rgba(255,255,255,.18),
+      transparent 30%
     ),
     linear-gradient(
       145deg,
       var(--navy),
-      #0d4168
+      var(--navy2)
     );
 
-  border-radius: 0 0 26px 26px;
+  border-radius: 0 0 28px 28px;
 
   box-shadow:
-    0 8px 24px rgba(9, 45, 75, 0.16);
+    0 8px 24px rgba(9,45,75,.16);
 }
 
 .dashboard-header::before {
-  content: "وصلني";
+  content: "وصلني المنوفية";
+
   position: absolute;
+
   left: 18px;
-  top: 16px;
+  top: 13px;
 
   padding: 6px 10px;
 
   border-radius: 20px;
 
-  background: rgba(255,255,255,0.10);
+  background: rgba(255,255,255,.1);
 
-  color: rgba(255,255,255,0.80);
+  color: rgba(255,255,255,.82);
 
   font-size: 10px;
+
   font-weight: 800;
 }
 
 .dashboard-header h2 {
   font-size: 22px;
+
   font-weight: 900;
+
   line-height: 1.5;
 
-  padding-left: 45px;
+  padding-left: 40px;
 
   margin-bottom: 5px;
 }
 
 .dashboard-header p {
-  color: rgba(255,255,255,0.78);
+  color: rgba(255,255,255,.8);
 
   font-size: 13px;
 
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
-/* =========================================================
-   PROFILE BOX
-   ========================================================= */
-
 .profile-box {
-  margin-top: 16px;
+  margin-top: 14px;
+
+  padding: 15px;
+
+  border-radius: 17px;
 
   background:
     linear-gradient(
@@ -613,14 +775,12 @@ select {
     );
 
   border: 1px solid #dfeaf0;
-
-  border-radius: 17px;
-
-  padding: 15px;
 }
 
-.profile-box p {
+.profile-box p,
+.profile-row {
   display: flex;
+
   align-items: center;
   justify-content: space-between;
 
@@ -635,73 +795,59 @@ select {
   font-size: 13px;
 }
 
-.profile-box p:last-child {
+.profile-box p:last-child,
+.profile-row:last-child {
   border-bottom: 0;
-  padding-bottom: 0;
 }
 
-.profile-box p:first-child {
-  padding-top: 0;
-}
-
-.profile-box strong {
+.profile-box strong,
+.profile-row strong {
   color: var(--navy);
 }
 
 /* =========================================================
-   NEW TRIP
+   TRIP CREATION
    ========================================================= */
-
-.trip-card {
-  width: 100%;
-
-  background: white;
-
-  border: 1px solid var(--border);
-
-  border-radius: var(--radius-xl);
-
-  padding: 19px 17px;
-
-  margin-bottom: 15px;
-
-  box-shadow: var(--shadow-md);
-}
 
 .trip-card > h2 {
   color: var(--navy);
 
   font-size: 22px;
+
   font-weight: 900;
 
-  padding-bottom: 15px;
+  padding-bottom: 14px;
 
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 
   border-bottom: 1px solid #edf2f5;
 }
 
 .location-row {
   display: flex;
+
   gap: 8px;
+
   align-items: stretch;
 }
 
 .location-row input {
   flex: 1;
+
   min-width: 0;
 }
 
 .location-btn {
-  min-width: 94px;
+  min-width: 96px;
 
-  border-radius: 13px;
+  border-radius: 14px;
 
-  background: var(--blue-light);
+  background: var(--blue3);
 
   color: var(--blue);
 
   font-size: 13px;
+
   font-weight: 900;
 }
 
@@ -710,7 +856,7 @@ select {
 
   min-height: 53px;
 
-  border-radius: 13px;
+  border-radius: 14px;
 
   background:
     linear-gradient(
@@ -721,9 +867,10 @@ select {
 
   border: 1px solid #d2efde;
 
-  color: var(--green-2);
+  color: var(--green2);
 
   font-size: 14px;
+
   font-weight: 900;
 
   margin-bottom: 9px;
@@ -732,7 +879,7 @@ select {
 .trip-distance-preview {
   padding: 11px 12px;
 
-  border-radius: 12px;
+  border-radius: 13px;
 
   background: #f4f9fc;
 
@@ -747,8 +894,6 @@ select {
   color: var(--blue);
 }
 
-/* Price */
-
 #proposedPrice {
   text-align: center;
 
@@ -758,51 +903,31 @@ select {
 
   font-weight: 900;
 
-  color: var(--green-2);
+  color: var(--green2);
 
   background: #f6fcf8;
 }
 
-#proposedPrice::placeholder {
-  color: #9aa8b2;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-/* Passenger */
-
-#passengerCount {
-  background: #fafdff;
-}
-
 /* =========================================================
-   AVAILABLE TRIPS / LISTS
+   RIDE CARDS
    ========================================================= */
-
-#availableTripsList {
-  padding-bottom: 10px;
-}
-
-.trips-list {
-  padding-bottom: 20px;
-}
 
 .captain-trip-card {
   position: relative;
 
   overflow: hidden;
 
-  padding: 16px;
+  padding: 17px;
 
   margin-bottom: 13px;
 
-  border-radius: 18px;
+  border-radius: 20px;
 
-  background: white;
+  background: #fff;
 
-  border: 1px solid #dfe8ee;
+  border: 1px solid var(--border);
 
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow);
 }
 
 .captain-trip-card::before {
@@ -832,31 +957,33 @@ select {
 
   gap: 10px;
 
-  margin-bottom: 15px;
+  margin-bottom: 14px;
 }
 
 .trip-card-header h3 {
   color: var(--navy);
 
   font-size: 16px;
+
   font-weight: 900;
 }
 
-.trip-status {
+.trip-status,
+.ride-status {
   display: inline-flex;
 
   align-items: center;
   justify-content: center;
 
-  min-height: 27px;
+  min-height: 28px;
 
-  padding: 4px 10px;
+  padding: 5px 10px;
 
   border-radius: 30px;
 
-  background: var(--green-light);
+  background: var(--blue3);
 
-  color: var(--green-2);
+  color: var(--blue);
 
   font-size: 10px;
 
@@ -866,7 +993,6 @@ select {
 .trip-info {
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 
 .trip-info-row {
@@ -885,8 +1011,6 @@ select {
 }
 
 .trip-info-row strong {
-  flex: 0 0 auto;
-
   color: #60717e;
 
   font-size: 11px;
@@ -900,8 +1024,6 @@ select {
   font-size: 12px;
 
   text-align: left;
-
-  direction: rtl;
 }
 
 .trip-price {
@@ -909,7 +1031,7 @@ select {
 
   padding: 13px;
 
-  border-radius: 13px;
+  border-radius: 14px;
 
   background:
     linear-gradient(
@@ -928,7 +1050,7 @@ select {
 .trip-price strong {
   display: inline-block;
 
-  color: var(--green-2);
+  color: var(--green2);
 
   font-size: 20px;
 
@@ -939,8 +1061,8 @@ select {
   margin-top: 12px;
 
   display: flex;
+
   flex-direction: column;
-  gap: 0;
 }
 
 .trip-actions .primary-btn,
@@ -949,7 +1071,86 @@ select {
 }
 
 .trip-actions a.primary-btn {
-  color: white;
+  color: #fff;
+}
+
+.contact-box {
+  margin-top: 12px;
+
+  padding: 12px;
+
+  border-radius: 14px;
+
+  background: var(--green3);
+
+  color: var(--green2);
+
+  font-size: 13px;
+
+  font-weight: 800;
+}
+
+.contact-box a {
+  color: var(--green2);
+
+  font-weight: 900;
+}
+
+/* =========================================================
+   EMPTY
+   ========================================================= */
+
+.empty-state {
+  padding: 45px 18px;
+
+  text-align: center;
+
+  background: #fff;
+
+  border: 1px solid var(--border);
+
+  border-radius: 22px;
+
+  box-shadow: var(--shadow);
+}
+
+.empty-state .empty-icon {
+  width: 70px;
+  height: 70px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  margin: 0 auto 15px;
+
+  border-radius: 22px;
+
+  background: var(--blue3);
+
+  color: var(--blue);
+
+  font-size: 30px;
+}
+
+.empty-state h3,
+.empty-state h2 {
+  color: var(--navy);
+
+  font-size: 17px;
+
+  font-weight: 900;
+
+  margin-bottom: 8px;
+}
+
+.empty-state p {
+  color: var(--muted);
+
+  font-size: 13px;
+
+  line-height: 1.8;
 }
 
 /* =========================================================
@@ -969,12 +1170,14 @@ select {
   background: #eef3f6;
 
   display: flex;
+
   flex-direction: column;
 
   overflow: hidden;
 }
 
-#destinationMap {
+.map-page #destinationMap,
+.map-page #map {
   position: absolute;
 
   inset: 0;
@@ -994,8 +1197,6 @@ select {
     Tahoma,
     sans-serif;
 }
-
-/* Map top controls */
 
 .map-topbar {
   position: absolute;
@@ -1026,6 +1227,7 @@ select {
 
 .map-topbar input {
   flex: 1;
+
   min-width: 0;
 
   height: 49px;
@@ -1034,20 +1236,12 @@ select {
 
   border: 1px solid #dfe7ec;
 
-  border-radius: 14px;
+  border-radius: 15px;
 
-  background: rgba(255,255,255,0.97);
-
-  color: var(--text);
-
-  font-size: 14px;
+  background: rgba(255,255,255,.97);
 
   box-shadow:
-    0 6px 20px rgba(0,0,0,0.14);
-}
-
-.map-topbar input:focus {
-  border-color: var(--blue);
+    0 6px 20px rgba(0,0,0,.14);
 }
 
 .map-topbar button {
@@ -1058,22 +1252,21 @@ select {
 
   border-radius: 14px;
 
-  background: white;
+  background: #fff;
 
   color: var(--navy);
 
   font-size: 19px;
 
   box-shadow:
-    0 6px 20px rgba(0,0,0,0.14);
+    0 6px 20px rgba(0,0,0,.14);
 }
 
 .map-topbar button:last-child {
   background: var(--blue);
-  color: white;
-}
 
-/* Map bottom */
+  color: #fff;
+}
 
 .map-bottom-panel {
   position: absolute;
@@ -1096,55 +1289,114 @@ select {
   pointer-events: auto;
 }
 
-#selectedPlace {
+#selectedPlace,
+#routeDistanceInfo {
   width: 100%;
 
+  border-radius: 14px;
+
+  background: rgba(255,255,255,.96);
+
+  box-shadow:
+    0 6px 22px rgba(0,0,0,.14);
+}
+
+#selectedPlace {
   padding: 13px 14px;
 
   margin-bottom: 8px;
 
-  border-radius: 14px;
-
-  background: rgba(255,255,255,0.97);
-
-  border: 1px solid rgba(220,230,236,0.95);
+  border: 1px solid #dce6ec;
 
   color: var(--navy);
 
   font-size: 13px;
 
   line-height: 1.7;
-
-  box-shadow:
-    0 6px 22px rgba(0,0,0,0.14);
 }
 
 #routeDistanceInfo {
-  width: 100%;
-
   padding: 10px 12px;
-
-  border-radius: 12px;
-
-  background: rgba(255,255,255,0.95);
 
   color: var(--blue);
 
   font-size: 12px !important;
-
-  box-shadow:
-    0 5px 18px rgba(0,0,0,0.10);
 }
 
 .map-bottom-panel .primary-btn {
   min-height: 55px;
 
-  margin-top: 8px;
-
   border-radius: 15px;
 }
 
-/* Leaflet */
+.map-wrapper {
+  position: relative;
+
+  width: 100%;
+
+  height: 58vh;
+
+  min-height: 350px;
+
+  overflow: hidden;
+
+  border-radius: 21px;
+
+  margin-bottom: 14px;
+
+  border: 1px solid var(--border);
+
+  box-shadow: var(--shadow);
+}
+
+.map-wrapper #map {
+  width: 100%;
+  height: 100%;
+}
+
+.map-center-pin {
+  position: absolute;
+
+  top: 50%;
+  left: 50%;
+
+  transform:
+    translate(-50%, -100%);
+
+  z-index: 1000;
+
+  font-size: 38px;
+
+  pointer-events: none;
+
+  filter:
+    drop-shadow(
+      0 3px 4px rgba(0,0,0,.25)
+    );
+}
+
+.map-control {
+  position: absolute;
+
+  right: 12px;
+  bottom: 12px;
+
+  z-index: 1001;
+
+  width: 48px;
+  height: 48px;
+
+  border-radius: 14px;
+
+  background: #fff;
+
+  color: var(--blue);
+
+  font-size: 20px;
+
+  box-shadow:
+    0 5px 18px rgba(0,0,0,.15);
+}
 
 .leaflet-control-zoom {
   margin-top: 135px !important;
@@ -1165,138 +1417,208 @@ select {
 }
 
 /* =========================================================
-   EMPTY STATE
+   LIVE TRACKING
    ========================================================= */
 
-.empty-state {
-  padding: 45px 18px;
-
-  text-align: center;
-
-  background: white;
-
-  border: 1px solid var(--border);
-
-  border-radius: 20px;
-
-  box-shadow: var(--shadow-sm);
+#trackingScreen .map-wrapper {
+  height: 60vh;
+  min-height: 360px;
 }
 
-.empty-state .empty-icon {
-  width: 70px;
-  height: 70px;
+.tracking-marker {
+  width: 48px;
+  height: 48px;
+
+  border-radius: 50%;
 
   display: flex;
+
   align-items: center;
   justify-content: center;
 
-  margin: 0 auto 15px;
+  background: #fff;
 
-  border-radius: 22px;
+  border: 3px solid var(--blue);
 
-  background: var(--blue-light);
+  box-shadow:
+    0 6px 18px rgba(0,0,0,.22);
+
+  font-size: 25px;
+}
+
+.tracking-live {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  padding: 10px 12px;
+
+  border-radius: 14px;
+
+  background: var(--green3);
+
+  color: var(--green2);
+
+  font-size: 12px;
+
+  font-weight: 800;
+}
+
+.tracking-live::before {
+  content: "";
+
+  width: 9px;
+  height: 9px;
+
+  border-radius: 50%;
+
+  background: var(--green);
+
+  box-shadow:
+    0 0 0 5px rgba(32,166,90,.12);
+}
+
+/* =========================================================
+   NAVIGATION
+   ========================================================= */
+
+.nav {
+  position: fixed;
+
+  right: 0;
+  left: 0;
+  bottom: 0;
+
+  z-index: 6000;
+
+  width: 100%;
+  max-width: 560px;
+
+  margin: auto;
+
+  min-height: 72px;
+
+  display: flex;
+
+  align-items: stretch;
+
+  justify-content: space-around;
+
+  background: rgba(255,255,255,.98);
+
+  border-top: 1px solid var(--border);
+
+  box-shadow:
+    0 -7px 25px rgba(9,45,75,.09);
+
+  padding:
+    6px 6px
+    calc(6px + env(safe-area-inset-bottom));
+
+  backdrop-filter: blur(10px);
+}
+
+.nav button {
+  flex: 1;
+
+  background: transparent;
+
+  color: #71808d;
+
+  font-size: 11px;
+
+  font-weight: 800;
+
+  line-height: 1.6;
+
+  border-radius: 14px;
+}
+
+.nav button.active,
+.nav button:active {
+  background: var(--blue3);
 
   color: var(--blue);
-
-  font-size: 30px;
 }
 
-.empty-state h3,
-.empty-state h2 {
+.screen:not(#login):not(#register):not(#mapScreen):not(#trackingScreen) {
+  padding-bottom: 90px;
+}
+
+.screen#trackingScreen {
+  padding-bottom: 90px;
+}
+
+/* =========================================================
+   PROFILE
+   ========================================================= */
+
+.profile-page {
+  min-height: 100vh;
+
+  background: var(--bg);
+}
+
+.profile-photo {
+  width: 92px;
+  height: 92px;
+
+  display: block;
+
+  margin: 0 auto 12px;
+
+  border-radius: 50%;
+
+  object-fit: cover;
+
+  background: var(--blue3);
+
+  border: 4px solid #dcefff;
+}
+
+.profile-name {
+  text-align: center;
+
   color: var(--navy);
 
-  font-size: 17px;
+  font-size: 20px;
 
   font-weight: 900;
-
-  margin-bottom: 8px;
 }
 
-.empty-state p {
+.profile-phone {
+  text-align: center;
+
   color: var(--muted);
 
   font-size: 13px;
 
-  line-height: 1.8;
+  margin-top: 5px;
 }
 
 /* =========================================================
-   SUCCESS
+   STATUS / MESSAGE
    ========================================================= */
 
-.success-card {
-  width: 100%;
-
-  margin-top: 80px;
-
-  padding: 28px 20px;
-
-  background: white;
-
-  border: 1px solid var(--border);
-
-  border-radius: 24px;
-
-  text-align: center;
-
-  box-shadow: var(--shadow-lg);
-}
-
-.success-icon {
-  width: 82px;
-  height: 82px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  margin: 0 auto 17px;
-
-  border-radius: 50%;
-
-  background: var(--green-light);
-
-  color: var(--green);
-
-  font-size: 43px;
-  font-weight: 900;
-
-  box-shadow:
-    0 8px 25px rgba(32,166,90,0.14);
-}
-
-.success-card h2 {
-  color: var(--navy);
-
-  font-size: 23px;
-  font-weight: 900;
-
-  margin-bottom: 12px;
-}
-
-.success-card p {
+.status,
+.muted {
   color: var(--muted);
 
-  font-size: 14px;
+  font-size: 12px;
 
-  line-height: 1.8;
+  line-height: 1.7;
 
-  margin-bottom: 6px;
+  padding: 6px 0;
 }
 
-.success-card strong {
-  color: var(--green-2);
-}
-
-/* =========================================================
-   ALERT / MESSAGE
-   ========================================================= */
-
+.message-box,
 .app-message {
   position: fixed;
 
   top:
-    calc(12px + env(safe-area-inset-top));
+    calc(72px + env(safe-area-inset-top));
 
   right: 12px;
   left: 12px;
@@ -1305,11 +1627,17 @@ select {
 
   max-width: 530px;
 
-  margin: 0 auto;
+  margin: auto;
 
   padding: 13px 15px;
 
   border-radius: 14px;
+
+  background: #edf7ff;
+
+  border: 1px solid #cfe8fb;
+
+  color: #086bc6;
 
   font-size: 13px;
 
@@ -1317,24 +1645,13 @@ select {
 
   line-height: 1.7;
 
-  box-shadow:
-    0 10px 30px rgba(9,45,75,0.15);
-
-  animation: messageIn 0.22s ease-out;
-}
-
-.app-message.info {
-  background: #edf7ff;
-
-  border: 1px solid #cfe8fb;
-
-  color: #086bc6;
+  box-shadow: var(--shadow);
 }
 
 .app-message.success {
   background: #edf9f2;
 
-  border: 1px solid #cdeedb;
+  border-color: #cdeedb;
 
   color: #168049;
 }
@@ -1342,21 +1659,17 @@ select {
 .app-message.error {
   background: #fff1f1;
 
-  border: 1px solid #ffd5d5;
+  border-color: #ffd5d5;
 
   color: #c52e2e;
 }
 
-@keyframes messageIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
+.app-message.info {
+  background: #edf7ff;
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  border-color: #cfe8fb;
+
+  color: #086bc6;
 }
 
 /* =========================================================
@@ -1364,13 +1677,14 @@ select {
    ========================================================= */
 
 .loading-screen {
-  width: 100%;
   min-height: 250px;
 
   display: flex;
+
   flex-direction: column;
 
   align-items: center;
+
   justify-content: center;
 
   gap: 14px;
@@ -1397,7 +1711,7 @@ select {
   border-radius: 50%;
 
   animation:
-    spin 0.8s linear infinite;
+    spin .8s linear infinite;
 }
 
 @keyframes spin {
@@ -1407,7 +1721,74 @@ select {
 }
 
 /* =========================================================
-   GENERAL OLD CLASS COMPATIBILITY
+   SUCCESS
+   ========================================================= */
+
+.success-card {
+  width: 100%;
+
+  margin-top: 70px;
+
+  padding: 28px 20px;
+
+  background: #fff;
+
+  border: 1px solid var(--border);
+
+  border-radius: 24px;
+
+  text-align: center;
+
+  box-shadow: var(--shadow2);
+}
+
+.success-icon {
+  width: 82px;
+  height: 82px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  margin: 0 auto 17px;
+
+  border-radius: 50%;
+
+  background: var(--green3);
+
+  color: var(--green);
+
+  font-size: 43px;
+
+  box-shadow:
+    0 8px 25px rgba(32,166,90,.14);
+}
+
+.success-card h2 {
+  color: var(--navy);
+
+  font-size: 23px;
+
+  font-weight: 900;
+
+  margin-bottom: 12px;
+}
+
+.success-card p {
+  color: var(--muted);
+
+  font-size: 14px;
+
+  line-height: 1.8;
+}
+
+.success-card strong {
+  color: var(--green2);
+}
+
+/* =========================================================
+   OLD COMPATIBILITY
    ========================================================= */
 
 .form-group {
@@ -1428,15 +1809,6 @@ select {
   color: var(--text);
 
   padding: 12px 13px;
-}
-
-.form-control:focus {
-  border-color: var(--blue);
-
-  box-shadow:
-    0 0 0 3px rgba(8,120,223,0.10);
-
-  background: white;
 }
 
 .alert {
@@ -1477,14 +1849,10 @@ select {
   border: 1px solid #cfe8fb;
 }
 
-/* =========================================================
-   OLD DASHBOARD COMPATIBILITY
-   ========================================================= */
-
 .dashboard-grid {
   display: grid;
 
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2,1fr);
 
   gap: 12px;
 
@@ -1496,13 +1864,13 @@ select {
 
   padding: 15px;
 
-  background: white;
+  background: #fff;
 
   border: 1px solid var(--border);
 
   border-radius: 18px;
 
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow);
 }
 
 .dashboard-card .icon {
@@ -1510,6 +1878,7 @@ select {
   height: 42px;
 
   display: flex;
+
   align-items: center;
   justify-content: center;
 
@@ -1517,7 +1886,7 @@ select {
 
   border-radius: 13px;
 
-  background: var(--blue-light);
+  background: var(--blue3);
 
   color: var(--blue);
 
@@ -1539,834 +1908,8 @@ select {
 }
 
 /* =========================================================
-   OLD TRIP CLASSES COMPATIBILITY
+   SEARCH
    ========================================================= */
-
-.trips-page {
-  min-height: 100vh;
-  background: var(--bg);
-}
-
-.trips-header {
-  margin: 0 -16px 15px;
-
-  padding: 22px 18px;
-
-  color: white;
-
-  background:
-    linear-gradient(
-      145deg,
-      var(--navy),
-      var(--navy-2)
-    );
-
-  border-radius: 0 0 24px 24px;
-}
-
-.trips-header h1 {
-  font-size: 21px;
-  font-weight: 900;
-}
-
-.trip-location {
-  position: relative;
-
-  padding-right: 23px;
-
-  margin-bottom: 10px;
-}
-
-.trip-location::before {
-  content: "";
-
-  position: absolute;
-
-  right: 3px;
-  top: 5px;
-
-  width: 10px;
-  height: 10px;
-
-  border-radius: 50%;
-
-  background: var(--blue);
-}
-
-.trip-location.destination::before {
-  background: var(--green);
-}
-
-.trip-location strong {
-  display: block;
-
-  color: #778691;
-
-  font-size: 10px;
-
-  margin-bottom: 3px;
-}
-
-.trip-location span {
-  display: block;
-
-  color: var(--text);
-
-  font-size: 13px;
-
-  line-height: 1.6;
-}
-
-.trip-divider {
-  height: 1px;
-
-  background: #edf2f5;
-
-  margin: 12px 0;
-}
-
-.trip-info-grid {
-  display: grid;
-
-  grid-template-columns: repeat(2, 1fr);
-
-  gap: 9px;
-}
-
-.trip-info-item {
-  padding: 10px;
-
-  border-radius: 12px;
-
-  background: #f6f9fb;
-}
-
-.trip-info-item small {
-  display: block;
-
-  color: #7a8995;
-
-  font-size: 10px;
-
-  margin-bottom: 3px;
-}
-
-.trip-info-item strong {
-  color: var(--navy);
-
-  font-size: 12px;
-}
-
-/* =========================================================
-   PROFILE
-   ========================================================= */
-
-.profile-page {
-  min-height: 100vh;
-
-  background: var(--bg);
-}
-
-.profile-card {
-  margin: 18px 0;
-
-  padding: 20px;
-
-  background: white;
-
-  border: 1px solid var(--border);
-
-  border-radius: 20px;
-
-  box-shadow: var(--shadow-md);
-}
-
-.profile-photo {
-  width: 88px;
-  height: 88px;
-
-  display: block;
-
-  margin: 0 auto 12px;
-
-  border-radius: 50%;
-
-  object-fit: cover;
-
-  background: var(--blue-light);
-
-  border: 4px solid #dcefff;
-}
-
-.profile-name {
-  text-align: center;
-
-  color: var(--navy);
-
-  font-size: 20px;
-  font-weight: 900;
-}
-
-.profile-phone {
-  text-align: center;
-
-  color: var(--muted);
-
-  font-size: 13px;
-
-  margin-top: 5px;
-}
-
-/* =========================================================
-   RESPONSIVE
-   ========================================================= */
-
-@media (min-width: 561px) {
-  .page-container {
-    min-height: 100vh;
-
-    box-shadow:
-      0 0 45px rgba(9,45,75,0.10);
-  }
-}
-
-@media (max-width: 380px) {
-  .page-container {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  .brand {
-    padding-top: 42px;
-  }
-
-  .brand h1 {
-    font-size: 27px;
-  }
-
-  .home-card,
-  .auth-card,
-  .trip-card {
-    border-radius: 19px;
-  }
-
-  .location-btn {
-    min-width: 82px;
-    font-size: 12px;
-  }
-
-  .dashboard-header {
-    margin-left: -12px;
-    margin-right: -12px;
-  }
-}
-
-/* =========================================================
-   ANDROID SAFE AREA
-   ========================================================= */
-
-@supports (padding: env(safe-area-inset-top)) {
-  .page-container {
-    padding-top: env(safe-area-inset-top);
-    padding-bottom:
-      calc(32px + env(safe-area-inset-bottom));
-  }
-
-  .map-page {
-    padding-top: env(safe-area-inset-top);
-  }
-}
-/* =========================================================
-   FIX: SCREEN VISIBILITY
-   ========================================================= */
-
-.screen {
-  display: none !important;
-  width: 100%;
-}
-
-.screen.active {
-  display: block !important;
-}
-
-/* تسجيل الدخول والتسجيل بدون شريط سفلي */
-#login.screen.active,
-#register.screen.active {
-  min-height: 100vh;
-}
-
-/* =========================================================
-   FIX: APP CONTAINER
-   ========================================================= */
-
-.app {
-  width: 100%;
-  min-height: 100vh;
-}
-
-.header {
-  width: 100%;
-  max-width: 560px;
-  margin: 0 auto;
-
-  min-height: 62px;
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  padding: 10px 16px;
-
-  background: white;
-
-  border-bottom: 1px solid var(--border);
-
-  box-shadow: var(--shadow-sm);
-
-  position: sticky;
-  top: 0;
-  z-index: 5000;
-}
-
-.logo {
-  color: var(--navy);
-  font-size: 19px;
-  font-weight: 900;
-}
-
-.logo span {
-  color: var(--blue);
-}
-
-.icon-button {
-  width: 42px;
-  height: 42px;
-
-  border-radius: 50%;
-
-  background: var(--blue-light);
-
-  color: var(--blue);
-
-  font-size: 19px;
-}
-
-/* =========================================================
-   CURRENT JS COMPATIBILITY
-   ========================================================= */
-
-.hero {
-  padding: 22px 0 16px;
-}
-
-.hero h2 {
-  color: var(--navy);
-  font-size: 23px;
-  font-weight: 900;
-  margin-bottom: 6px;
-}
-
-.hero p {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.card {
-  width: 100%;
-
-  background: white;
-
-  border: 1px solid var(--border);
-
-  border-radius: var(--radius-xl);
-
-  padding: 18px;
-
-  margin-bottom: 14px;
-
-  box-shadow: var(--shadow-sm);
-}
-
-.card label {
-  display: block;
-
-  color: #304452;
-
-  font-size: 13px;
-  font-weight: 800;
-
-  margin-bottom: 8px;
-}
-
-.card input,
-.card textarea,
-.card select {
-  width: 100%;
-
-  min-height: 50px;
-
-  border: 1px solid #d9e4eb;
-
-  border-radius: 13px;
-
-  background: #fafdff;
-
-  color: var(--text);
-
-  padding: 11px 13px;
-
-  margin-bottom: 12px;
-}
-
-.card textarea {
-  min-height: 100px;
-  line-height: 1.7;
-}
-
-.card input:focus,
-.card textarea:focus,
-.card select:focus {
-  border-color: var(--blue);
-
-  box-shadow:
-    0 0 0 3px rgba(8,120,223,.10);
-
-  background: white;
-}
-
-/* =========================================================
-   CURRENT BUTTON COMPATIBILITY
-   ========================================================= */
-
-.btn {
-  width: 100%;
-
-  min-height: 50px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 14px;
-
-  font-size: 14px;
-  font-weight: 800;
-
-  margin-top: 9px;
-}
-
-.btn.primary {
-  color: white;
-
-  background:
-    linear-gradient(
-      135deg,
-      var(--blue),
-      var(--blue-2)
-    );
-
-  box-shadow:
-    0 7px 18px rgba(8,120,223,.20);
-}
-
-.btn.green {
-  color: white;
-
-  background:
-    linear-gradient(
-      135deg,
-      var(--green),
-      var(--green-2)
-    );
-
-  box-shadow:
-    0 7px 18px rgba(32,166,90,.18);
-}
-
-.btn.outline {
-  color: var(--navy);
-
-  background: #eef5fa;
-
-  border: 1px solid #dfeaf1;
-}
-
-.btn.danger {
-  color: var(--danger);
-
-  background: var(--danger-bg);
-
-  border: 1px solid #ffdada;
-}
-
-.small-btn {
-  width: auto;
-  min-width: 80px;
-  padding: 0 14px;
-}
-
-/* =========================================================
-   STATUS
-   ========================================================= */
-
-.status {
-  color: var(--muted);
-
-  font-size: 12px;
-
-  line-height: 1.7;
-
-  padding: 7px 0;
-}
-
-.muted {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-/* =========================================================
-   AUTH CURRENT
-   ========================================================= */
-
-.auth-logo {
-  width: 75px;
-  height: 75px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  margin: 0 auto 14px;
-
-  border-radius: 23px;
-
-  background: var(--blue-light);
-
-  font-size: 38px;
-}
-
-.auth-card h1 {
-  text-align: center;
-
-  color: var(--navy);
-
-  font-size: 25px;
-  font-weight: 900;
-
-  margin-bottom: 7px;
-}
-
-.auth-card label {
-  display: block;
-
-  color: #304452;
-
-  font-size: 13px;
-  font-weight: 800;
-
-  margin: 13px 0 7px;
-}
-
-.auth-card input,
-.auth-card select {
-  width: 100%;
-
-  min-height: 51px;
-
-  border: 1px solid #d9e4eb;
-
-  border-radius: 13px;
-
-  background: #fafdff;
-
-  padding: 12px;
-
-  color: var(--text);
-}
-
-/* =========================================================
-   NAV
-   ========================================================= */
-
-.nav {
-  position: fixed;
-
-  right: 0;
-  left: 0;
-  bottom: 0;
-
-  z-index: 6000;
-
-  width: 100%;
-  max-width: 560px;
-
-  margin: 0 auto;
-
-  min-height: 68px;
-
-  display: flex;
-
-  align-items: stretch;
-
-  justify-content: space-around;
-
-  background: rgba(255,255,255,.97);
-
-  border-top: 1px solid var(--border);
-
-  box-shadow:
-    0 -7px 25px rgba(9,45,75,.09);
-
-  padding:
-    6px 6px
-    calc(6px + env(safe-area-inset-bottom));
-}
-
-.nav button {
-  flex: 1;
-
-  background: transparent;
-
-  color: #71808d;
-
-  font-size: 11px;
-
-  font-weight: 800;
-
-  line-height: 1.6;
-
-  border-radius: 12px;
-}
-
-.nav button:active {
-  background: var(--blue-light);
-  color: var(--blue);
-}
-
-/* مساحة عشان الـnav ما تغطيش المحتوى */
-.screen:not(#login):not(#register):not(#mapScreen) {
-  padding-bottom: 85px;
-}
-
-/* الخريطة لا تحتاج nav */
-#mapScreen {
-  padding-bottom: 0 !important;
-}
-
-/* =========================================================
-   MESSAGE
-   ========================================================= */
-
-.message-box {
-  position: fixed;
-
-  top: 72px;
-
-  right: 12px;
-  left: 12px;
-
-  z-index: 20000;
-
-  max-width: 530px;
-
-  margin: auto;
-
-  padding: 13px 15px;
-
-  border-radius: 14px;
-
-  background: #edf7ff;
-
-  border: 1px solid #cfe8fb;
-
-  color: #086bc6;
-
-  font-size: 13px;
-
-  font-weight: 700;
-
-  line-height: 1.7;
-
-  box-shadow: var(--shadow-md);
-}
-
-/* =========================================================
-   PROFILE ROW
-   ========================================================= */
-
-.profile-row {
-  display: flex;
-
-  align-items: center;
-  justify-content: space-between;
-
-  gap: 12px;
-
-  padding: 12px 0;
-
-  border-bottom: 1px solid #edf2f5;
-
-  font-size: 13px;
-}
-
-.profile-row:last-child {
-  border-bottom: 0;
-}
-
-.profile-row span {
-  color: var(--muted);
-}
-
-.profile-row strong {
-  color: var(--navy);
-
-  text-align: left;
-}
-
-/* =========================================================
-   RIDE STATUS
-   ========================================================= */
-
-.ride-status {
-  display: inline-flex;
-
-  align-items: center;
-
-  min-height: 28px;
-
-  padding: 5px 10px;
-
-  margin-bottom: 12px;
-
-  border-radius: 20px;
-
-  background: var(--blue-light);
-
-  color: var(--blue);
-
-  font-size: 11px;
-
-  font-weight: 900;
-}
-
-.contact-box {
-  margin-top: 12px;
-
-  padding: 12px;
-
-  border-radius: 13px;
-
-  background: var(--green-light);
-
-  color: var(--green-2);
-
-  font-size: 13px;
-
-  font-weight: 800;
-}
-
-.contact-box a {
-  color: var(--green-2);
-  font-weight: 900;
-}
-
-/* =========================================================
-   MAP CURRENT JS COMPATIBILITY
-   ========================================================= */
-
-.map-head {
-  display: flex;
-
-  align-items: center;
-  justify-content: space-between;
-
-  gap: 10px;
-
-  margin-bottom: 12px;
-}
-
-.map-head h2 {
-  color: var(--navy);
-
-  font-size: 19px;
-
-  font-weight: 900;
-
-  margin-bottom: 4px;
-}
-
-.map-head small {
-  color: var(--muted);
-
-  font-size: 11px;
-
-  line-height: 1.6;
-}
-
-.map-wrapper {
-  position: relative;
-
-  width: 100%;
-
-  height: 58vh;
-  min-height: 350px;
-
-  overflow: hidden;
-
-  border-radius: 20px;
-
-  margin-bottom: 14px;
-
-  border: 1px solid var(--border);
-
-  box-shadow: var(--shadow-md);
-}
-
-#map {
-  width: 100%;
-  height: 100%;
-}
-
-.map-center-pin {
-  position: absolute;
-
-  top: 50%;
-  left: 50%;
-
-  transform: translate(-50%, -100%);
-
-  z-index: 1000;
-
-  font-size: 38px;
-
-  pointer-events: none;
-
-  filter: drop-shadow(0 3px 4px rgba(0,0,0,.25));
-}
-
-.map-control {
-  position: absolute;
-
-  right: 12px;
-  bottom: 12px;
-
-  z-index: 1001;
-
-  width: 48px;
-  height: 48px;
-
-  border-radius: 14px;
-
-  background: white;
-
-  color: var(--blue);
-
-  font-size: 20px;
-
-  box-shadow: 0 5px 18px rgba(0,0,0,.15);
-}
 
 .search-results {
   max-height: 220px;
@@ -2407,11 +1950,53 @@ select {
 }
 
 /* =========================================================
-   SAFE AREA
+   RESPONSIVE
    ========================================================= */
 
+@media (max-width: 380px) {
+  .page-container {
+    padding-left: 11px;
+    padding-right: 11px;
+  }
+
+  .brand {
+    padding-top: 32px;
+  }
+
+  .brand h1 {
+    font-size: 27px;
+  }
+
+  .header {
+    padding-left: 11px;
+    padding-right: 11px;
+  }
+
+  .logo {
+    width: 160px;
+  }
+
+  .dashboard-header {
+    margin-left: -11px;
+    margin-right: -11px;
+  }
+
+  .location-btn {
+    min-width: 82px;
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 561px) {
+  .page-container {
+    box-shadow:
+      0 0 45px rgba(9,45,75,.1);
+  }
+}
+
 @supports (padding: env(safe-area-inset-bottom)) {
-  .nav {
-    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  .page-container {
+    padding-bottom:
+      calc(95px + env(safe-area-inset-bottom));
   }
 }
